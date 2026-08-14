@@ -1,0 +1,24 @@
+node_modules/
+.next/
+.open-next/
+out/
+build/
+
+# env
+.env
+.env.local
+.env*.local
+.dev.vars
+.dev.vars.local
+
+# cloudflare
+.wrangler/
+cloudflare-env.d.ts
+
+# data dumps — 40k-row exports do not belong in git
+data/*.csv
+!data/sample-leads.csv
+
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store

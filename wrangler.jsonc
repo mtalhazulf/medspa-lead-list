@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "medspa-lead-list",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-11-20",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    // Public values only. Set NEXT_PUBLIC_* here (they ship to the browser anyway).
+    // Secrets (none are required by the Worker today) go through `wrangler secret put`.
+    "NEXT_PUBLIC_SUPABASE_URL": "",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": ""
+  }
+}
