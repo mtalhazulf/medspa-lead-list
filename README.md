@@ -1,4 +1,4 @@
-# Med Spa Lead Desk
+# OC Lead Desk
 
 A sales workspace for a ~40,000-row med spa lead list: search and filter the list, work leads
 through a pipeline, log every call/email/DM, and see what is warm, due, and won.

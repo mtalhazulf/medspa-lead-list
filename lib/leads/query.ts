@@ -44,6 +44,7 @@ export interface LeadQuery {
   /** "me" | "unassigned" | a profile id | "" for any. */
   owner: string;
   category: string;
+  clientType: string;
   tag: string;
   minRating: number | null;
   minReviews: number | null;
@@ -100,6 +101,7 @@ export function parseLeadQuery(params: RawSearchParams): LeadQuery {
     state: list(params.state).map((s) => s.toUpperCase().slice(0, 2)),
     owner: first(params.owner),
     category: first(params.category).slice(0, 80),
+    clientType: first(params.type).slice(0, 40),
     tag: first(params.tag).slice(0, 40),
     minRating: num(params.min_rating),
     minReviews: num(params.min_reviews),
@@ -131,6 +133,7 @@ export function buildLeadQueryString(query: Partial<LeadQuery>, base?: LeadQuery
   if (merged.state.length) params.set("state", merged.state.join(","));
   if (merged.owner) params.set("owner", merged.owner);
   if (merged.category) params.set("category", merged.category);
+  if (merged.clientType) params.set("type", merged.clientType);
   if (merged.tag) params.set("tag", merged.tag);
   if (merged.minRating !== null) params.set("min_rating", String(merged.minRating));
   if (merged.minReviews !== null) params.set("min_reviews", String(merged.minReviews));
@@ -153,6 +156,7 @@ export const EMPTY_QUERY: LeadQuery = {
   state: [],
   owner: "",
   category: "",
+  clientType: "",
   tag: "",
   minRating: null,
   minReviews: null,
@@ -173,6 +177,7 @@ export function hasActiveFilters(query: LeadQuery): boolean {
       query.state.length ||
       query.owner ||
       query.category ||
+      query.clientType ||
       query.tag ||
       query.minRating !== null ||
       query.minReviews !== null ||

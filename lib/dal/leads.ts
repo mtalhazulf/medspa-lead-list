@@ -5,18 +5,20 @@ import { cache } from "react";
 import { requireUser } from "@/lib/dal/auth";
 import { createClient } from "@/lib/supabase/server";
 import { SORT_FIELDS, toPrefixTsQuery, type LeadQuery } from "@/lib/leads/query";
-import type { ActivityItem, LeadDetail, LeadListItem } from "@/lib/leads/types";
-import type { DashboardStats, LeadStatus } from "@/lib/types/database";
+import type { ActivityItem, LeadDetail, LeadListItem, PipelineNav } from "@/lib/leads/types";
+import type { DashboardStats } from "@/lib/types/database";
 
-export type { ActivityItem, LeadDetail, LeadListItem };
+export type { ActivityItem, LeadDetail, LeadListItem, PipelineNav };
 
 /** Columns the leads table needs — deliberately narrower than the full row. */
 const LIST_COLUMNS = `
   id, company_name, city, state, postal_code, phone, email, website,
   google_rating, google_reviews, num_locations, primary_category,
+  client_type_id, contact_name, contact_email, contact_phone,
   status, priority, tags, owner_id, next_follow_up_at, last_contacted_at,
   updated_at, instagram, booking_url,
-  owner:profiles!leads_owner_id_fkey (id, full_name, email)
+  owner:profiles!leads_owner_id_fkey (id, full_name, email),
+  client_type:client_types (id, name, slug, color, description, sort_order)
 ` as const;
 
 export interface LeadListResult {
@@ -52,6 +54,7 @@ export async function listLeads(query: LeadQuery): Promise<LeadListResult> {
   if (query.status.length) builder = builder.in("status", query.status);
   if (query.state.length) builder = builder.in("state", query.state);
   if (query.category) builder = builder.eq("primary_category", query.category);
+  if (query.clientType) builder = builder.eq("client_type_id", query.clientType);
   if (query.tag) builder = builder.contains("tags", [query.tag]);
 
   if (query.owner === "me") builder = builder.eq("owner_id", user.id);
@@ -118,7 +121,9 @@ export const getLead = cache(async (id: string): Promise<LeadDetail | null> => {
 
   const { data, error } = await supabase
     .from("leads")
-    .select("*, owner:profiles!leads_owner_id_fkey (id, full_name, email)")
+    .select(
+      "*, owner:profiles!leads_owner_id_fkey (id, full_name, email), client_type:client_types (id, name, slug, color, description, sort_order)",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -141,9 +146,40 @@ export async function listLeadActivities(leadId: string, limit = 100): Promise<A
   return (data ?? []) as unknown as ActivityItem[];
 }
 
-export interface DashboardData {
-  stats: DashboardStats;
-  statusCounts: { status: LeadStatus; count: number }[];
+const EMPTY_STATS: DashboardStats = {
+  total: 0,
+  worked: 0,
+  interested: 0,
+  won: 0,
+  pipeline_value: 0,
+  won_value: 0,
+  contacted_last_7d: 0,
+  follow_ups_due: 0,
+  unassigned: 0,
+  with_email: 0,
+  activities_last_7d: 0,
+};
+
+/** Counts the sidebar needs on every authenticated page. Cached per request. */
+export const getPipelineNav = cache(async (): Promise<PipelineNav> => {
+  await requireUser();
+  const supabase = await createClient();
+
+  const [statsRes, statusRes] = await Promise.all([
+    supabase.rpc("lead_dashboard_stats"),
+    supabase.rpc("lead_status_counts"),
+  ]);
+
+  return {
+    stats: (statsRes.data as DashboardStats | null) ?? EMPTY_STATS,
+    statusCounts: (statusRes.data ?? []).map((row) => ({
+      status: row.status,
+      count: Number(row.count),
+    })),
+  };
+});
+
+export interface DashboardData extends PipelineNav {
   stateCounts: { state: string; total: number; interested: number; won: number }[];
   recentActivity: ActivityItem[];
   followUps: LeadListItem[];
@@ -154,9 +190,9 @@ export async function getDashboardData(): Promise<DashboardData> {
   const supabase = await createClient();
 
   // Independent reads — run them concurrently, not as a waterfall.
-  const [statsRes, statusRes, stateRes, activityRes, followUpRes] = await Promise.all([
-    supabase.rpc("lead_dashboard_stats"),
-    supabase.rpc("lead_status_counts"),
+  // getPipelineNav is request-cached, so the layout and this page share one round trip.
+  const [nav, stateRes, activityRes, followUpRes] = await Promise.all([
+    getPipelineNav(),
     supabase.rpc("lead_state_counts", { limit_count: 10 }),
     supabase
       .from("lead_activities")
@@ -174,23 +210,8 @@ export async function getDashboardData(): Promise<DashboardData> {
       .limit(10),
   ]);
 
-  const emptyStats: DashboardStats = {
-    total: 0,
-    worked: 0,
-    interested: 0,
-    won: 0,
-    pipeline_value: 0,
-    won_value: 0,
-    contacted_last_7d: 0,
-    follow_ups_due: 0,
-    unassigned: 0,
-    with_email: 0,
-    activities_last_7d: 0,
-  };
-
   return {
-    stats: (statsRes.data as DashboardStats | null) ?? emptyStats,
-    statusCounts: statusRes.data ?? [],
+    ...nav,
     stateCounts: stateRes.data ?? [],
     recentActivity: (activityRes.data ?? []) as unknown as ActivityItem[],
     followUps: (followUpRes.data ?? []) as unknown as LeadListItem[],
@@ -202,9 +223,11 @@ export const getFilterOptions = cache(async () => {
   await requireUser();
   const supabase = await createClient();
 
-  const [statesRes, categoriesRes] = await Promise.all([
+  const [statesRes, categoriesRes, typesRes, tagsRes] = await Promise.all([
     supabase.rpc("lead_state_counts", { limit_count: 60 }),
     supabase.rpc("lead_primary_categories", { limit_count: 30 }),
+    supabase.from("client_types").select("id, name, slug, color, description, sort_order").order("sort_order").order("name"),
+    supabase.from("tags").select("id, name, slug, color, sort_order").order("sort_order").order("name"),
   ]);
 
   return {
@@ -212,5 +235,31 @@ export const getFilterOptions = cache(async () => {
       .map((s) => ({ value: s.state, count: s.total }))
       .sort((a, b) => a.value.localeCompare(b.value)),
     categories: (categoriesRes.data ?? []).map((c) => ({ value: c.category, count: c.total })),
+    clientTypes: typesRes.data ?? [],
+    tags: tagsRes.data ?? [],
   };
+});
+
+export const listClientTypes = cache(async () => {
+  await requireUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("client_types")
+    .select("id, name, slug, color, description, sort_order")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (error) throw new Error(`Failed to load client types: ${error.message}`);
+  return data ?? [];
+});
+
+export const listTags = cache(async () => {
+  await requireUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tags")
+    .select("id, name, slug, color, sort_order")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (error) throw new Error(`Failed to load tags: ${error.message}`);
+  return data ?? [];
 });

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useOptimistic, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 
 import { bulkUpdateLeads, getMatchingLeadIds, setLeadStatus } from "@/lib/actions/leads";
+import { LabelChip } from "@/components/label-chip";
 import {
   formatDate,
   formatNumber,
@@ -17,7 +18,7 @@ import {
   toHref,
 } from "@/lib/format";
 import { buildLeadQueryString, type LeadQuery } from "@/lib/leads/query";
-import type { LeadListItem, Teammate } from "@/lib/leads/types";
+import type { CatalogClientType, CatalogTag, LeadListItem, Teammate } from "@/lib/leads/types";
 import { LEAD_STATUSES, PRIORITY_LABELS, statusMeta } from "@/lib/pipeline";
 import type { LeadStatus } from "@/lib/types/database";
 
@@ -25,15 +26,19 @@ interface Props {
   rows: LeadListItem[];
   query: LeadQuery;
   teammates: Teammate[];
+  tags: CatalogTag[];
+  clientTypes: CatalogClientType[];
   total: number;
 }
 
-export function LeadsTable({ rows, query, total }: Props) {
+export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const lastClicked = useRef<string | null>(null);
+  const tagColor = new Map(tags.map((t) => [t.name, t.color]));
 
   const [optimisticRows, applyOptimistic] = useOptimistic(
     rows,
@@ -52,11 +57,22 @@ export function LeadsTable({ rows, query, total }: Props) {
     });
   }
 
-  function toggleOne(id: string) {
+  function toggleOne(id: string, shiftKey = false) {
     setSelected((prev) => {
       const next = new Set(prev);
+      if (shiftKey && lastClicked.current) {
+        const ids = optimisticRows.map((r) => r.id);
+        const from = ids.indexOf(lastClicked.current);
+        const to = ids.indexOf(id);
+        if (from >= 0 && to >= 0) {
+          const [start, end] = from < to ? [from, to] : [to, from];
+          for (let i = start; i <= end; i++) next.add(ids[i]!);
+          return next;
+        }
+      }
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      lastClicked.current = id;
       return next;
     });
   }
@@ -101,16 +117,18 @@ export function LeadsTable({ rows, query, total }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
         {selected.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">
-            <span className="font-medium">{formatNumber(selected.size)} selected</span>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-lg bg-slate-900 px-2.5 py-1.5 font-medium text-white">
+              {formatNumber(selected.size)} selected
+            </span>
 
             <select
-              className="rounded-md border-0 bg-slate-800 px-2 py-1 text-sm text-white"
+              className="input w-auto"
               value=""
               onChange={(e) => e.target.value && runBulk({ status: e.target.value as LeadStatus })}
-              aria-label="Set status for selected leads"
+              aria-label="Set status"
               disabled={isPending}
             >
               <option value="">Set status…</option>
@@ -121,18 +139,94 @@ export function LeadsTable({ rows, query, total }: Props) {
               ))}
             </select>
 
-            <button
-              type="button"
-              className="rounded-md bg-slate-800 px-2 py-1 hover:bg-slate-700"
-              onClick={() => runBulk({ owner: "me" })}
+            <select
+              className="input w-auto"
+              value=""
+              onChange={(e) => {
+                const value = e.target.value;
+                if (!value) return;
+                if (value === "__clear") runBulk({ clearClientType: true });
+                else runBulk({ clientTypeId: value });
+              }}
+              aria-label="Set client type"
               disabled={isPending}
             >
-              Assign to me
-            </button>
+              <option value="">Set type…</option>
+              {clientTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+              <option value="__clear">Clear type</option>
+            </select>
+
+            <select
+              className="input w-auto"
+              value=""
+              onChange={(e) => e.target.value && runBulk({ addTagId: e.target.value })}
+              aria-label="Add tag"
+              disabled={isPending}
+            >
+              <option value="">Add tag…</option>
+              {tags.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="input w-auto"
+              value=""
+              onChange={(e) => e.target.value && runBulk({ removeTagId: e.target.value })}
+              aria-label="Remove tag"
+              disabled={isPending}
+            >
+              <option value="">Remove tag…</option>
+              {tags.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="input w-auto"
+              value=""
+              onChange={(e) => e.target.value && runBulk({ owner: e.target.value })}
+              aria-label="Assign owner"
+              disabled={isPending}
+            >
+              <option value="">Assign…</option>
+              <option value="me">Me</option>
+              <option value="unassigned">Unassigned</option>
+              {teammates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="input w-auto"
+              value=""
+              onChange={(e) =>
+                e.target.value !== "" && runBulk({ priority: Number(e.target.value) })
+              }
+              aria-label="Set priority"
+              disabled={isPending}
+            >
+              <option value="">Priority…</option>
+              {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
 
             <button
               type="button"
-              className="rounded-md bg-slate-800 px-2 py-1 hover:bg-slate-700"
+              className="btn-secondary"
               onClick={() => runBulk({ nextFollowUpAt: new Date().toISOString().slice(0, 10) })}
               disabled={isPending}
             >
@@ -142,7 +236,7 @@ export function LeadsTable({ rows, query, total }: Props) {
             {selected.size < total && (
               <button
                 type="button"
-                className="rounded-md px-2 py-1 underline underline-offset-2 hover:bg-slate-800"
+                className="btn-ghost text-sm underline underline-offset-2"
                 onClick={selectAllMatching}
                 disabled={isPending}
               >
@@ -150,16 +244,14 @@ export function LeadsTable({ rows, query, total }: Props) {
               </button>
             )}
 
-            <button
-              type="button"
-              className="rounded-md px-2 py-1 text-slate-300 hover:bg-slate-800"
-              onClick={() => setSelected(new Set())}
-            >
+            <button type="button" className="btn-ghost text-sm" onClick={() => setSelected(new Set())}>
               Clear
             </button>
           </div>
         ) : (
-          <p className="text-sm text-slate-500">Select rows to update several leads at once.</p>
+          <p className="px-1 text-sm text-slate-500">
+            Select rows for bulk actions. Shift-click to select a range.
+          </p>
         )}
 
         <a href={exportHref} className="btn-secondary ml-auto text-sm">
@@ -192,6 +284,7 @@ export function LeadsTable({ rows, query, total }: Props) {
                 />
               </th>
               <th className="px-3 py-2.5 font-medium">Company</th>
+              <th className="px-3 py-2.5 font-medium">Type</th>
               <th className="px-3 py-2.5 font-medium">Contact</th>
               <th className="px-3 py-2.5 text-right font-medium">Google</th>
               <th className="px-3 py-2.5 text-right font-medium">Loc.</th>
@@ -214,7 +307,7 @@ export function LeadsTable({ rows, query, total }: Props) {
                     <input
                       type="checkbox"
                       checked={selected.has(lead.id)}
-                      onChange={() => toggleOne(lead.id)}
+                      onChange={(e) => toggleOne(lead.id, e.nativeEvent instanceof MouseEvent ? e.nativeEvent.shiftKey : false)}
                       aria-label={`Select ${lead.company_name}`}
                       className="h-4 w-4 rounded border-slate-300"
                     />
@@ -234,19 +327,25 @@ export function LeadsTable({ rows, query, total }: Props) {
                     {lead.tags.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {lead.tags.slice(0, 3).map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600"
-                          >
-                            {tag}
-                          </span>
+                          <LabelChip key={tag} name={tag} color={tagColor.get(tag)} className="text-[11px]" />
                         ))}
                       </div>
                     )}
                   </td>
 
+                  <td className="px-3 py-2.5 align-top">
+                    {lead.client_type ? (
+                      <LabelChip name={lead.client_type.name} color={lead.client_type.color} />
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
+                  </td>
+
                   <td className="px-3 py-2.5 align-top text-xs">
                     <div className="flex flex-col gap-0.5">
+                      {lead.contact_name && (
+                        <span className="font-medium text-slate-700">{lead.contact_name}</span>
+                      )}
                       {tel ? (
                         <a href={tel} className="text-slate-700 hover:underline">
                           {lead.phone}
@@ -357,7 +456,7 @@ export function LeadsTable({ rows, query, total }: Props) {
 
             {optimisticRows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-10 text-center text-sm text-slate-500">
+                <td colSpan={10} className="px-3 py-10 text-center text-sm text-slate-500">
                   No leads match these filters.
                 </td>
               </tr>

@@ -49,9 +49,14 @@ const detailsSchema = z.object({
   status: statusEnum,
   priority: z.coerce.number().int().min(0).max(3),
   ownerId: z.string().trim(),
+  clientTypeId: z.string().trim(),
   nextFollowUpAt: optionalText,
   dealValue: optionalNumber,
-  tags: z.string().trim().max(300),
+  contactName: z.string().trim().max(120),
+  contactTitle: z.string().trim().max(80),
+  contactEmail: z.string().trim().max(160),
+  contactPhone: z.string().trim().max(40),
+  leadSource: z.string().trim().max(40),
   notes: z.string().trim().max(20_000),
 });
 
@@ -66,9 +71,14 @@ export async function saveLeadDetails(
     status: formData.get("status"),
     priority: formData.get("priority"),
     ownerId: formData.get("ownerId") ?? "",
+    clientTypeId: formData.get("clientTypeId") ?? "",
     nextFollowUpAt: formData.get("nextFollowUpAt") ?? "",
     dealValue: formData.get("dealValue") ?? "",
-    tags: formData.get("tags") ?? "",
+    contactName: formData.get("contactName") ?? "",
+    contactTitle: formData.get("contactTitle") ?? "",
+    contactEmail: formData.get("contactEmail") ?? "",
+    contactPhone: formData.get("contactPhone") ?? "",
+    leadSource: formData.get("leadSource") ?? "",
     notes: formData.get("notes") ?? "",
   });
 
@@ -76,25 +86,37 @@ export async function saveLeadDetails(
     return { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const { leadId, ownerId, tags, ...rest } = parsed.data;
+  const { leadId, ownerId, clientTypeId, ...rest } = parsed.data;
+  const tagIds = formData
+    .getAll("tagIds")
+    .map((v) => (typeof v === "string" ? v : ""))
+    .filter((v) => uuid.safeParse(v).success);
+
   const supabase = await createClient();
 
   const patch: LeadUpdate = {
     status: rest.status,
     priority: rest.priority,
     owner_id: ownerId === "me" ? user.id : ownerId === "" ? null : ownerId,
+    client_type_id: clientTypeId === "" ? null : clientTypeId,
     next_follow_up_at: rest.nextFollowUpAt,
     deal_value: rest.dealValue,
+    contact_name: rest.contactName || null,
+    contact_title: rest.contactTitle || null,
+    contact_email: rest.contactEmail || null,
+    contact_phone: rest.contactPhone || null,
+    lead_source: rest.leadSource || null,
     notes: rest.notes === "" ? null : rest.notes,
-    tags: tags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean)
-      .slice(0, 20),
   };
 
   const { error } = await supabase.from("leads").update(patch).eq("id", leadId);
   if (error) return { ok: false, message: error.message };
+
+  const { error: tagError } = await supabase.rpc("replace_lead_tags", {
+    p_lead_id: leadId,
+    p_tag_ids: tagIds,
+  });
+  if (tagError) return { ok: false, message: tagError.message };
 
   revalidateLead(leadId);
   return { ok: true, message: "Saved" };
@@ -158,10 +180,13 @@ export async function logActivity(_prev: ActionState, formData: FormData): Promi
 const bulkSchema = z.object({
   ids: z.array(uuid).min(1, "Select at least one lead").max(2000),
   status: statusEnum.optional(),
-  owner: z.enum(["me", "unassigned"]).optional(),
+  owner: z.string().trim().min(1).max(64).optional(),
   priority: z.number().int().min(0).max(3).optional(),
   nextFollowUpAt: z.string().optional(),
-  addTag: z.string().trim().max(40).optional(),
+  clientTypeId: z.string().uuid().optional(),
+  clearClientType: z.boolean().optional(),
+  addTagId: z.string().uuid().optional(),
+  removeTagId: z.string().uuid().optional(),
 });
 
 export type BulkPatch = Omit<z.infer<typeof bulkSchema>, "ids">;
@@ -178,13 +203,23 @@ export async function bulkUpdateLeads(ids: string[], patch: BulkPatch): Promise<
   const update: LeadUpdate = {};
 
   if (parsed.data.status) update.status = parsed.data.status;
-  if (parsed.data.owner) update.owner_id = parsed.data.owner === "me" ? user.id : null;
+  if (parsed.data.owner === "me") update.owner_id = user.id;
+  else if (parsed.data.owner === "unassigned") update.owner_id = null;
+  else if (parsed.data.owner && uuid.safeParse(parsed.data.owner).success) {
+    update.owner_id = parsed.data.owner;
+  }
   if (parsed.data.priority !== undefined) update.priority = parsed.data.priority;
   if (parsed.data.nextFollowUpAt !== undefined) {
     update.next_follow_up_at = parsed.data.nextFollowUpAt || null;
   }
+  if (parsed.data.clearClientType) update.client_type_id = null;
+  else if (parsed.data.clientTypeId) update.client_type_id = parsed.data.clientTypeId;
 
-  if (Object.keys(update).length === 0 && !parsed.data.addTag) {
+  if (
+    Object.keys(update).length === 0 &&
+    !parsed.data.addTagId &&
+    !parsed.data.removeTagId
+  ) {
     return { ok: false, message: "Nothing to update" };
   }
 
@@ -193,25 +228,20 @@ export async function bulkUpdateLeads(ids: string[], patch: BulkPatch): Promise<
     if (error) return { ok: false, message: error.message };
   }
 
-  if (parsed.data.addTag) {
-    // Tag appends must not clobber existing tags, so merge per lead.
-    const { data: current, error: readError } = await supabase
-      .from("leads")
-      .select("id, tags")
-      .in("id", parsed.data.ids);
+  if (parsed.data.addTagId) {
+    const { error } = await supabase.rpc("bulk_add_lead_tags", {
+      p_lead_ids: parsed.data.ids,
+      p_tag_id: parsed.data.addTagId,
+    });
+    if (error) return { ok: false, message: error.message };
+  }
 
-    if (readError) return { ok: false, message: readError.message };
-
-    const tag = parsed.data.addTag;
-    const needsTag = (current ?? []).filter((row) => !row.tags.includes(tag));
-
-    for (const row of needsTag) {
-      const { error: tagError } = await supabase
-        .from("leads")
-        .update({ tags: [...row.tags, tag] })
-        .eq("id", row.id);
-      if (tagError) return { ok: false, message: tagError.message };
-    }
+  if (parsed.data.removeTagId) {
+    const { error } = await supabase.rpc("bulk_remove_lead_tags", {
+      p_lead_ids: parsed.data.ids,
+      p_tag_id: parsed.data.removeTagId,
+    });
+    if (error) return { ok: false, message: error.message };
   }
 
   revalidatePath("/leads");

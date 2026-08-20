@@ -53,6 +53,12 @@ export type LeadRow = {
   facebook: string | null;
   tiktok: string | null;
   booking_url: string | null;
+  client_type_id: string | null;
+  contact_name: string | null;
+  contact_title: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  lead_source: string | null;
   status: LeadStatus;
   priority: number;
   owner_id: string | null;
@@ -106,6 +112,33 @@ export type ProfileRow = {
   created_at: string;
 };
 
+export type ClientTypeRow = {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TagRow = {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LeadTagRow = {
+  lead_id: string;
+  tag_id: string;
+  created_at: string;
+};
+
 export type DashboardStats = {
   total: number;
   worked: number;
@@ -141,6 +174,24 @@ export type Database = {
         Update: Partial<ProfileRow>;
         Relationships: [];
       };
+      client_types: {
+        Row: ClientTypeRow;
+        Insert: Partial<ClientTypeRow> & { name: string; slug: string };
+        Update: Partial<ClientTypeRow>;
+        Relationships: [];
+      };
+      tags: {
+        Row: TagRow;
+        Insert: Partial<TagRow> & { name: string; slug: string };
+        Update: Partial<TagRow>;
+        Relationships: [];
+      };
+      lead_tags: {
+        Row: LeadTagRow;
+        Insert: Pick<LeadTagRow, "lead_id" | "tag_id"> & { created_at?: string };
+        Update: Partial<LeadTagRow>;
+        Relationships: [];
+      };
     };
     Views: Record<never, never>;
     Functions: {
@@ -159,6 +210,18 @@ export type Database = {
       lead_state_counts: {
         Args: { limit_count?: number };
         Returns: { state: string; total: number; interested: number; won: number }[];
+      };
+      bulk_add_lead_tags: {
+        Args: { p_lead_ids: string[]; p_tag_id: string };
+        Returns: number;
+      };
+      bulk_remove_lead_tags: {
+        Args: { p_lead_ids: string[]; p_tag_id: string };
+        Returns: number;
+      };
+      replace_lead_tags: {
+        Args: { p_lead_id: string; p_tag_ids: string[] };
+        Returns: undefined;
       };
     };
     Enums: {

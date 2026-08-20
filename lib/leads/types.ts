@@ -1,10 +1,23 @@
-import type { LeadActivityRow, LeadRow, LeadStatus } from "@/lib/types/database";
+import type {
+  ClientTypeRow,
+  DashboardStats,
+  LeadActivityRow,
+  LeadRow,
+  LeadStatus,
+  TagRow,
+} from "@/lib/types/database";
 
 export interface OwnerRef {
   id: string;
   full_name: string | null;
   email: string | null;
 }
+
+export type CatalogTag = Pick<TagRow, "id" | "name" | "slug" | "color" | "sort_order">;
+export type CatalogClientType = Pick<
+  ClientTypeRow,
+  "id" | "name" | "slug" | "color" | "description" | "sort_order"
+>;
 
 /** Row shape rendered by the leads table — narrower than the full lead. */
 export interface LeadListItem {
@@ -20,6 +33,10 @@ export interface LeadListItem {
   google_reviews: number | null;
   num_locations: number | null;
   primary_category: string | null;
+  client_type_id: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
   status: LeadStatus;
   priority: number;
   tags: string[];
@@ -30,10 +47,12 @@ export interface LeadListItem {
   instagram: string | null;
   booking_url: string | null;
   owner: OwnerRef | null;
+  client_type: CatalogClientType | null;
 }
 
 export interface LeadDetail extends LeadRow {
   owner: OwnerRef | null;
+  client_type: CatalogClientType | null;
 }
 
 export interface ActivityItem extends LeadActivityRow {
@@ -43,4 +62,9 @@ export interface ActivityItem extends LeadActivityRow {
 export interface Teammate {
   id: string;
   name: string;
+}
+
+export interface PipelineNav {
+  stats: DashboardStats;
+  statusCounts: { status: LeadStatus; count: number }[];
 }
