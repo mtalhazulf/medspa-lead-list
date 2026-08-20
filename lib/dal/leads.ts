@@ -17,8 +17,7 @@ const LIST_COLUMNS = `
   client_type_id, contact_name, contact_email, contact_phone,
   status, priority, tags, owner_id, next_follow_up_at, last_contacted_at,
   updated_at, instagram, booking_url,
-  owner:profiles!leads_owner_id_fkey (id, full_name, email),
-  client_type:client_types (id, name, slug, color, description, sort_order)
+  owner:profiles!leads_owner_id_fkey (id, full_name, email)
 ` as const;
 
 export interface LeadListResult {
@@ -90,9 +89,14 @@ export async function listLeads(query: LeadQuery): Promise<LeadListResult> {
 
   if (error) throw new Error(`Failed to load leads: ${error.message}`);
 
+  const types = await listClientTypes();
+  const typeById = new Map(types.map((t) => [t.id, t]));
   const total = count ?? 0;
   return {
-    rows: (data ?? []) as unknown as LeadListItem[],
+    rows: ((data ?? []) as unknown as LeadListItem[]).map((row) => ({
+      ...row,
+      client_type: row.client_type_id ? (typeById.get(row.client_type_id) ?? null) : null,
+    })),
     total,
     page: query.page,
     perPage: query.perPage,
@@ -121,14 +125,21 @@ export const getLead = cache(async (id: string): Promise<LeadDetail | null> => {
 
   const { data, error } = await supabase
     .from("leads")
-    .select(
-      "*, owner:profiles!leads_owner_id_fkey (id, full_name, email), client_type:client_types (id, name, slug, color, description, sort_order)",
-    )
+    .select("*, owner:profiles!leads_owner_id_fkey (id, full_name, email)")
     .eq("id", id)
     .maybeSingle();
 
   if (error) throw new Error(`Failed to load lead: ${error.message}`);
-  return (data as unknown as LeadDetail | null) ?? null;
+  if (!data) return null;
+
+  const types = await listClientTypes();
+  const lead = data as unknown as LeadDetail;
+  return {
+    ...lead,
+    client_type: lead.client_type_id
+      ? (types.find((t) => t.id === lead.client_type_id) ?? null)
+      : null,
+  };
 });
 
 export async function listLeadActivities(leadId: string, limit = 100): Promise<ActivityItem[]> {

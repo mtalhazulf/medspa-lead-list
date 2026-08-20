@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
+import type { Route } from "next";
 import Link from "next/link";
 
 import { saveLeadDetails, type ActionState } from "@/lib/actions/leads";
@@ -151,7 +152,7 @@ export function PipelinePanel({
         {tags.length === 0 ? (
           <p className="text-xs text-slate-500">
             No tags yet.{" "}
-            <Link href="/settings" className="underline hover:text-slate-900">
+            <Link href={"/settings?tab=tags" as Route} className="underline hover:text-slate-900">
               Configure them in Settings
             </Link>
             .

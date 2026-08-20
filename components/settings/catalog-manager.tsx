@@ -106,24 +106,27 @@ export function ClientTypeCatalog({ types }: { types: CatalogClientType[] }) {
         </p>
       </div>
 
-      <form action={action} className="mt-4 grid gap-2 sm:grid-cols-[1fr_8rem_1fr_auto] sm:items-end">
-        <div>
-          <label className="label mb-1" htmlFor="type-name">
-            New type
-          </label>
-          <input id="type-name" name="name" className="input" placeholder="e.g. Med spa" required />
-        </div>
-        <div>
-          <label className="label mb-1" htmlFor="type-color">
-            Color
-          </label>
-          <select id="type-color" name="color" className="input" defaultValue="emerald">
-            {LABEL_COLORS.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+      <form action={action} className="mt-4 flex flex-col gap-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-40 flex-1">
+            <label className="label mb-1" htmlFor="type-name">
+              New type
+            </label>
+            <input id="type-name" name="name" className="input" placeholder="e.g. Med spa" required />
+          </div>
+          <div>
+            <label className="label mb-1" htmlFor="type-color">
+              Color
+            </label>
+            <select id="type-color" name="color" className="input w-auto" defaultValue="emerald">
+              {LABEL_COLORS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <AddButton label="Add type" />
         </div>
         <div>
           <label className="label mb-1" htmlFor="type-desc">
@@ -131,7 +134,6 @@ export function ClientTypeCatalog({ types }: { types: CatalogClientType[] }) {
           </label>
           <input id="type-desc" name="description" className="input" placeholder="Optional" />
         </div>
-        <AddButton label="Add type" />
       </form>
       {state.message && (
         <p className={`mt-2 text-sm ${state.ok ? "text-emerald-700" : "text-rose-700"}`}>{state.message}</p>

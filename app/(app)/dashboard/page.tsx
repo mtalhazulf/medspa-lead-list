@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
 import Link from "next/link";
 
 import { StatusPill } from "@/components/status-pill";
@@ -6,7 +6,7 @@ import { getDashboardData } from "@/lib/dal/leads";
 import { formatCurrency, formatDate, formatRelative, formatNumber, isOverdue } from "@/lib/format";
 import { activityMeta, LEAD_STATUSES, statusMeta } from "@/lib/pipeline";
 
-export const metadata: Metadata = { title: "Dashboard" };
+export const metadata: Metadata = { title: "Overview" };
 
 export default async function DashboardPage() {
   const { stats, statusCounts, stateCounts, recentActivity, followUps } = await getDashboardData();
@@ -16,13 +16,39 @@ export default async function DashboardPage() {
   const contactRate = stats.total > 0 ? Math.round((stats.worked / stats.total) * 100) : 0;
   const winRate = stats.worked > 0 ? Math.round((stats.won / stats.worked) * 100) : 0;
 
+  if (stats.total === 0) {
+    return (
+      <div className="max-w-2xl space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Overview</h1>
+          <p className="mt-0.5 text-sm text-slate-500">The desk is empty until the list is imported.</p>
+        </div>
+        <section className="card p-6">
+          <p className="text-sm font-medium text-slate-900">No clients on file</p>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Import the client CSV from Settings, then this board fills with due work, stage
+            counts, and follow-ups.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link href={"/settings?tab=import" as Route} className="btn-primary">
+              Import the list
+            </Link>
+            <Link href="/leads" className="btn-secondary">
+              Open the list
+            </Link>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Pipeline overview</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Overview</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            {formatNumber(stats.total)} med spas in the list · {formatNumber(stats.with_email)} with
+            {formatNumber(stats.total)} clients in the list · {formatNumber(stats.with_email)} with
             an email on file
           </p>
         </div>

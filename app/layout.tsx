@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="min-h-full">
         <Script id="sidebar-mode" strategy="beforeInteractive">
           {`try{var s=localStorage.getItem("lead-desk.sidebar");if(s==="rail"||s==="hidden"||s==="open")document.documentElement.dataset.sidebar=s}catch(e){}`}

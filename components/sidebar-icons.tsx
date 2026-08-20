@@ -141,3 +141,12 @@ export function IconGear(props: { className?: string }) {
     </svg>
   );
 }
+
+export function IconLeave(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className={props.className}>
+      <path d="M6.5 3.5H4.25A.75.75 0 0 0 3.5 4.25v7.5c0 .41.34.75.75.75H6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M7 8h5.5M10.5 5.5 13 8l-2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

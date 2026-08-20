@@ -76,13 +76,32 @@ export type LeadRow = {
 
 export type LeadInsert = Omit<
   LeadRow,
-  "id" | "dedupe_key" | "created_at" | "updated_at" | "status_changed_at"
+  | "id"
+  | "dedupe_key"
+  | "created_at"
+  | "updated_at"
+  | "status_changed_at"
+  | "status"
+  | "priority"
+  | "owner_id"
+  | "notes"
+  | "tags"
+  | "deal_value"
+  | "next_follow_up_at"
+  | "last_contacted_at"
+  | "client_type_id"
 > & {
   id?: string;
   status?: LeadStatus;
   priority?: number;
-  categories?: string[];
+  owner_id?: string | null;
+  notes?: string | null;
   tags?: string[];
+  deal_value?: number | null;
+  next_follow_up_at?: string | null;
+  last_contacted_at?: string | null;
+  client_type_id?: string | null;
+  categories?: string[];
   source?: string;
 };
 

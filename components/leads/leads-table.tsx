@@ -118,6 +118,7 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
 
   return (
     <div className="space-y-3">
+      {(selected.size > 0 || total > 0) && (
       <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
         {selected.size > 0 ? (
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -251,7 +252,7 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
           </div>
         ) : (
           <p className="px-1 text-sm text-slate-500">
-            Select rows for bulk actions. Shift-click to select a range.
+            {total > 0 ? "Select rows for bulk actions. Shift-click a range." : "Import a list to start working leads."}
           </p>
         )}
 
@@ -259,6 +260,7 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
           Export CSV
         </a>
       </div>
+      )}
 
       {message && (
         <p
@@ -461,8 +463,15 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
 
             {optimisticRows.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-10 text-center text-sm text-slate-500">
-                  No leads match these filters.
+                <td colSpan={10} className="px-3 py-16 text-center">
+                  <p className="text-sm font-medium text-slate-800">
+                    {total === 0 ? "No leads in the list yet" : "No leads match these filters"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {total === 0
+                      ? "Run the importer against your CSV, then this table fills in."
+                      : "Clear filters or widen the search."}
+                  </p>
                 </td>
               </tr>
             )}

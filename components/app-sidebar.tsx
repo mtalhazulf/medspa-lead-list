@@ -16,6 +16,7 @@ import {
   IconGear,
   IconGrid,
   IconInbox,
+  IconLeave,
   IconList,
   IconMark,
   IconOpen,
@@ -107,7 +108,7 @@ export function AppSidebar({
       className={`app-sidebar flex flex-col ${mobileOpen ? "is-mobile-open" : ""}`}
       aria-label="Lead tracking"
     >
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200/80 px-3">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200/80 py-3 pl-3 pr-7">
         <Link
           href="/dashboard"
           className="flex min-w-0 items-center gap-2 text-slate-900"
@@ -127,7 +128,7 @@ export function AppSidebar({
           href="/dashboard"
           active={pathname === "/dashboard"}
           icon={<IconGrid className="h-4 w-4" />}
-          label="Board"
+          label="Overview"
           onNavigate={onNavigate}
         />
         <TrackLink
@@ -191,40 +192,25 @@ export function AppSidebar({
           onNavigate={onNavigate}
         />
 
-        <p className="sidebar-copy px-2 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-          Pipeline
-        </p>
-        <ul className="space-y-0.5">
-          {LEAD_STATUSES.map((meta) => (
-            <li key={meta.value}>
-              <StageLink
-                meta={meta}
-                count={countByStatus.get(meta.value) ?? 0}
-                active={
-                  onLeads &&
-                  sameStatuses(statuses, [meta.value]) &&
-                  !due &&
-                  !owner
-                }
-                onNavigate={onNavigate}
-              />
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-4">
-          <TrackLink
-            href="/settings"
-            active={pathname.startsWith("/settings")}
-            icon={<IconGear className="h-4 w-4" />}
-            label="Settings"
-            onNavigate={onNavigate}
-          />
-        </div>
+        <PipelineStages
+          countByStatus={countByStatus}
+          onLeads={onLeads}
+          statuses={statuses}
+          due={due}
+          owner={owner}
+          onNavigate={onNavigate}
+        />
       </nav>
 
       <div className="shrink-0 border-t border-slate-200/80 p-2">
-        <div className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+        <TrackLink
+          href="/settings"
+          active={pathname.startsWith("/settings")}
+          icon={<IconGear className="h-4 w-4" />}
+          label="Settings"
+          onNavigate={onNavigate}
+        />
+        <div className="mt-1 flex items-center gap-2 rounded-lg px-2 py-1.5">
           <span
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] font-semibold text-white"
             title={user.email}
@@ -232,23 +218,20 @@ export function AppSidebar({
             {initials(user.fullName)}
           </span>
           <div className="sidebar-copy min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-slate-800">
-              {user.fullName}
-            </p>
+            <p className="truncate text-xs font-medium text-slate-800">{user.fullName}</p>
             <p className="truncate text-[11px] text-slate-400">{user.email}</p>
           </div>
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="btn-ghost h-8 w-8 shrink-0 p-0 text-slate-400 hover:text-slate-800"
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <IconLeave className="h-4 w-4" />
+            </button>
+          </form>
         </div>
-        <form action={signOut}>
-          <button
-            type="submit"
-            className="btn-ghost mt-1 w-full justify-start px-2 text-xs"
-          >
-            <span className="sidebar-copy">Sign out</span>
-            <span className="rail-only" aria-hidden="true">
-              Out
-            </span>
-          </button>
-        </form>
       </div>
     </aside>
   );
@@ -371,6 +354,57 @@ function TrackLink({
   );
 }
 
+function PipelineStages({
+  countByStatus,
+  onLeads,
+  statuses,
+  due,
+  owner,
+  onNavigate,
+}: {
+  countByStatus: Map<LeadStatus, number>;
+  onLeads: boolean;
+  statuses: string[];
+  due: string | null;
+  owner: string | null;
+  onNavigate: () => void;
+}) {
+  const anyActive = onLeads && statuses.length === 1 && !due && !owner;
+  const [open, setOpen] = useState(anyActive);
+
+  useEffect(() => {
+    if (anyActive) setOpen(true);
+  }, [anyActive]);
+
+  return (
+    <div className="sidebar-copy pt-3">
+      <button
+        type="button"
+        className="sidebar-copy flex w-full items-center justify-between rounded-lg px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 hover:text-slate-600"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        Pipeline
+        <span className="text-[11px] font-normal normal-case tracking-normal">{open ? "Hide" : "Show"}</span>
+      </button>
+      {open && (
+        <ul className="mt-1 space-y-0.5">
+          {LEAD_STATUSES.map((meta) => (
+            <li key={meta.value}>
+              <StageLink
+                meta={meta}
+                count={countByStatus.get(meta.value) ?? 0}
+                active={onLeads && sameStatuses(statuses, [meta.value]) && !due && !owner}
+                onNavigate={onNavigate}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function StageLink({
   meta,
   count,
@@ -398,11 +432,11 @@ function StageLink({
         className={`h-2 w-2 shrink-0 rounded-full ${active ? "bg-white" : STAGE_DOT[meta.value]}`}
       />
       <span className="sidebar-copy min-w-0 flex-1 truncate">{meta.label}</span>
-      <span
-        className={`sidebar-count tabular-nums ${active ? "text-white/80" : "text-slate-400"}`}
-      >
-        {compactCount(count)}
-      </span>
+      {count > 0 && (
+        <span className={`sidebar-count tabular-nums ${active ? "text-white/80" : "text-slate-400"}`}>
+          {compactCount(count)}
+        </span>
+      )}
     </Link>
   );
 }

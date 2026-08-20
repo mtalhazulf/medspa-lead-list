@@ -44,9 +44,7 @@ export function LeadFilters({ query, states, categories, teammates, clientTypes,
       query.maxReviews !== null ||
       query.minLocations !== null ||
       query.has.length > 0 ||
-      Boolean(query.category) ||
-      Boolean(query.tag) ||
-      Boolean(query.clientType),
+      Boolean(query.category),
   );
   const searchRef = useRef(query.q);
 
@@ -87,17 +85,55 @@ export function LeadFilters({ query, states, categories, teammates, clientTypes,
   }
 
   return (
-    <div className={`card p-4 ${isPending ? "opacity-70" : ""}`}>
+    <div className={`card p-3 ${isPending ? "opacity-70" : ""}`}>
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search name, contact, city, category, email, phone…"
-          className="input max-w-xs flex-1"
+          className="input min-w-[14rem] flex-1"
           aria-label="Search leads"
         />
 
+        <select
+          className="input w-auto"
+          value={`${query.sort}:${query.dir}`}
+          onChange={(e) => {
+            const [sort, dir] = e.target.value.split(":");
+            apply({ sort: sort as LeadQuery["sort"], dir: dir as "asc" | "desc" });
+          }}
+          aria-label="Sort"
+        >
+          {Object.entries(SORT_FIELDS).map(([key, meta]) => (
+            <optgroup key={key} label={meta.label}>
+              <option value={`${key}:desc`}>{meta.label} ↓</option>
+              <option value={`${key}:asc`}>{meta.label} ↑</option>
+            </optgroup>
+          ))}
+        </select>
+
+        <button
+          type="button"
+          className="btn-ghost h-9 text-sm"
+          onClick={() => setShowAdvanced((v) => !v)}
+          aria-expanded={showAdvanced}
+        >
+          {showAdvanced ? "Fewer filters" : "More filters"}
+        </button>
+
+        {hasActiveFilters(query) && (
+          <button
+            type="button"
+            className="btn-ghost h-9 text-sm text-rose-600 hover:bg-rose-50"
+            onClick={() => startTransition(() => router.push("/leads"))}
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <select
           className="input w-auto"
           value={query.state[0] ?? ""}
@@ -169,45 +205,9 @@ export function LeadFilters({ query, states, categories, teammates, clientTypes,
           <option value="today">Due today</option>
           <option value="week">Due within 7 days</option>
         </select>
-
-        <select
-          className="input w-auto"
-          value={`${query.sort}:${query.dir}`}
-          onChange={(e) => {
-            const [sort, dir] = e.target.value.split(":");
-            apply({ sort: sort as LeadQuery["sort"], dir: dir as "asc" | "desc" });
-          }}
-          aria-label="Sort"
-        >
-          {Object.entries(SORT_FIELDS).map(([key, meta]) => (
-            <optgroup key={key} label={meta.label}>
-              <option value={`${key}:desc`}>{meta.label} ↓</option>
-              <option value={`${key}:asc`}>{meta.label} ↑</option>
-            </optgroup>
-          ))}
-        </select>
-
-        <button
-          type="button"
-          className="btn-ghost text-sm"
-          onClick={() => setShowAdvanced((v) => !v)}
-          aria-expanded={showAdvanced}
-        >
-          {showAdvanced ? "Fewer filters" : "More filters"}
-        </button>
-
-        {hasActiveFilters(query) && (
-          <button
-            type="button"
-            className="btn-ghost text-sm text-rose-600 hover:bg-rose-50"
-            onClick={() => startTransition(() => router.push("/leads"))}
-          >
-            Clear all
-          </button>
-        )}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         {LEAD_STATUSES.map((meta) => {
           const active = query.status.includes(meta.value);
           return (

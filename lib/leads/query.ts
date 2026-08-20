@@ -74,7 +74,9 @@ function list(value: string | string[] | undefined): string[] {
 }
 
 function num(value: string | string[] | undefined): number | null {
-  const parsed = Number(first(value));
+  const raw = first(value);
+  if (raw === "") return null;
+  const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
