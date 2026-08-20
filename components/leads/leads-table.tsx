@@ -67,6 +67,7 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
         if (from >= 0 && to >= 0) {
           const [start, end] = from < to ? [from, to] : [to, from];
           for (let i = start; i <= end; i++) next.add(ids[i]!);
+          lastClicked.current = id;
           return next;
         }
       }
@@ -307,7 +308,11 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
                     <input
                       type="checkbox"
                       checked={selected.has(lead.id)}
-                      onChange={(e) => toggleOne(lead.id, e.nativeEvent instanceof MouseEvent ? e.nativeEvent.shiftKey : false)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        toggleOne(lead.id, e.shiftKey);
+                      }}
+                      onChange={() => undefined}
                       aria-label={`Select ${lead.company_name}`}
                       className="h-4 w-4 rounded border-slate-300"
                     />

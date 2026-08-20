@@ -5,8 +5,9 @@ import { notFound } from "next/navigation";
 import { ActivityTimeline } from "@/components/leads/activity-timeline";
 import { LogActivityForm } from "@/components/leads/log-activity-form";
 import { PipelinePanel } from "@/components/leads/pipeline-panel";
+import { LabelChip } from "@/components/label-chip";
 import { listTeammates } from "@/lib/dal/auth";
-import { getLead, listLeadActivities } from "@/lib/dal/leads";
+import { getLead, listClientTypes, listLeadActivities, listTags } from "@/lib/dal/leads";
 import { formatDate, formatNumber, instagramHandle, instagramHref, prettyDomain, telHref, toHref } from "@/lib/format";
 
 export async function generateMetadata({
@@ -25,7 +26,12 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const lead = await getLead(id);
   if (!lead) notFound();
 
-  const [activities, teammates] = await Promise.all([listLeadActivities(id), listTeammates()]);
+  const [activities, teammates, clientTypes, tags] = await Promise.all([
+    listLeadActivities(id),
+    listTeammates(),
+    listClientTypes(),
+    listTags(),
+  ]);
 
   const address = [
     [lead.address_line1, lead.address_line2].filter(Boolean).join(" "),
@@ -59,6 +65,14 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                   {lead.company_name}
                 </h1>
                 <p className="mt-1 text-sm text-slate-500">{address || "No address on file"}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {lead.client_type && (
+                    <LabelChip name={lead.client_type.name} color={lead.client_type.color} />
+                  )}
+                  {lead.tags.map((tag) => (
+                    <LabelChip key={tag} name={tag} />
+                  ))}
+                </div>
               </div>
               {lead.google_rating !== null && (
                 <div className="text-right">
@@ -77,6 +91,35 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             </div>
 
             <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Field label="Decision maker">
+                {lead.contact_name ? (
+                  <span>
+                    {lead.contact_name}
+                    {lead.contact_title ? ` · ${lead.contact_title}` : ""}
+                  </span>
+                ) : (
+                  <Empty />
+                )}
+              </Field>
+              <Field label="Their phone">
+                {lead.contact_phone ? (
+                  <a href={telHref(lead.contact_phone) ?? "#"} className="hover:underline">
+                    {lead.contact_phone}
+                  </a>
+                ) : (
+                  <Empty />
+                )}
+              </Field>
+              <Field label="Their email">
+                {lead.contact_email ? (
+                  <a href={`mailto:${lead.contact_email}`} className="break-all hover:underline">
+                    {lead.contact_email}
+                  </a>
+                ) : (
+                  <Empty />
+                )}
+              </Field>
+              <Field label="Source">{lead.lead_source || <Empty />}</Field>
               <Field label="Phone">
                 {tel ? (
                   <a href={tel} className="hover:underline">
@@ -189,7 +232,12 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         </div>
 
         <div className="lg:col-span-1">
-          <PipelinePanel lead={lead} teammates={teammates} />
+          <PipelinePanel
+            lead={lead}
+            teammates={teammates}
+            clientTypes={clientTypes}
+            tags={tags}
+          />
         </div>
       </div>
     </div>

@@ -13,6 +13,7 @@ import {
 
 import {
   IconClock,
+  IconGear,
   IconGrid,
   IconInbox,
   IconList,
@@ -90,10 +91,13 @@ export function AppSidebar({
   const statuses = parseList(params.get("status"));
   const due = params.get("due");
   const owner = params.get("owner");
+  const typeFilter = params.get("type");
+  const tagFilter = params.get("tag");
   const onLeads = pathname === "/leads";
   const onLeadDetail = pathname.startsWith("/leads/");
 
-  const allLeadsActive = onLeads && !statuses.length && !due && !owner;
+  const allLeadsActive =
+    onLeads && !statuses.length && !due && !owner && !typeFilter && !tagFilter;
   const warmActive =
     onLeads && sameStatuses(statuses, WARM_STATUSES) && !due && !owner;
   const newCount = countByStatus.get("new") ?? 0;
@@ -207,6 +211,16 @@ export function AppSidebar({
             </li>
           ))}
         </ul>
+
+        <div className="mt-4">
+          <TrackLink
+            href="/settings"
+            active={pathname.startsWith("/settings")}
+            icon={<IconGear className="h-4 w-4" />}
+            label="Settings"
+            onNavigate={onNavigate}
+          />
+        </div>
       </nav>
 
       <div className="shrink-0 border-t border-slate-200/80 p-2">
@@ -290,7 +304,7 @@ function SidebarSearch({ onRequestOpen }: { onRequestOpen: () => void }) {
             type="search"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="Find a spa…"
+            placeholder="Find a client…"
             className="input h-9 pl-8 pr-10 text-sm"
             aria-label="Search leads"
           />

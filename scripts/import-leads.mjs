@@ -66,6 +66,11 @@ const FIELD_ALIASES = {
   facebook: ["facebook", "fb", "facebookurl"],
   tiktok: ["tiktok", "tiktokurl", "tiktokhandle"],
   booking_url: ["bookingurl", "booking", "bookinglink", "scheduler"],
+  contact_name: ["contactname", "decisionmaker", "ownername", "fullname"],
+  contact_title: ["contacttitle", "title", "jobtitle", "role"],
+  contact_email: ["contactemail2", "personalemail", "directemail"],
+  contact_phone: ["contactphone", "mobile", "cellphone", "directphone"],
+  lead_source: ["leadsource", "source", "origin"],
 };
 
 const normalizeHeader = (header) => String(header ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -146,6 +151,11 @@ function toLead(row, columns) {
     facebook: text(get("facebook")),
     tiktok: text(get("tiktok")),
     booking_url: text(get("booking_url")),
+    contact_name: text(get("contact_name")),
+    contact_title: text(get("contact_title")),
+    contact_email: text(get("contact_email"))?.toLowerCase() ?? null,
+    contact_phone: text(get("contact_phone")),
+    lead_source: text(get("lead_source")),
     source: basename(file),
   };
 }

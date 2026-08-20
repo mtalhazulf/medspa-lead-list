@@ -22,6 +22,8 @@ interface Props {
   states: { value: string; count: number }[];
   categories: { value: string; count: number }[];
   teammates: Teammate[];
+  clientTypes: { id: string; name: string }[];
+  tags: { id: string; name: string }[];
 }
 
 const HAS_LABELS: Record<HasFlag, string> = {
@@ -32,7 +34,7 @@ const HAS_LABELS: Record<HasFlag, string> = {
   booking: "Online booking",
 };
 
-export function LeadFilters({ query, states, categories, teammates }: Props) {
+export function LeadFilters({ query, states, categories, teammates, clientTypes, tags }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState(query.q);
@@ -43,7 +45,8 @@ export function LeadFilters({ query, states, categories, teammates }: Props) {
       query.minLocations !== null ||
       query.has.length > 0 ||
       Boolean(query.category) ||
-      Boolean(query.tag),
+      Boolean(query.tag) ||
+      Boolean(query.clientType),
   );
   const searchRef = useRef(query.q);
 
@@ -90,7 +93,7 @@ export function LeadFilters({ query, states, categories, teammates }: Props) {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search name, city, category, email, phone…"
+          placeholder="Search name, contact, city, category, email, phone…"
           className="input max-w-xs flex-1"
           aria-label="Search leads"
         />
@@ -105,6 +108,34 @@ export function LeadFilters({ query, states, categories, teammates }: Props) {
           {states.map((s) => (
             <option key={s.value} value={s.value}>
               {s.value} ({s.count})
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="input w-auto"
+          value={query.clientType}
+          onChange={(e) => apply({ clientType: e.target.value })}
+          aria-label="Client type"
+        >
+          <option value="">All types</option>
+          {clientTypes.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="input w-auto"
+          value={query.tag}
+          onChange={(e) => apply({ tag: e.target.value })}
+          aria-label="Tag"
+        >
+          <option value="">Any tag</option>
+          {tags.map((t) => (
+            <option key={t.id} value={t.name}>
+              {t.name}
             </option>
           ))}
         </select>

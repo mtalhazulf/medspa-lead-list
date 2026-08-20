@@ -247,6 +247,7 @@ select
   100
 from leads, unnest(tags) as t
 where trim(t) <> ''
+  and trim(both '-' from regexp_replace(lower(trim(t)), '[^a-z0-9]+', '-', 'g')) <> ''
 on conflict (slug) do nothing;
 
 insert into lead_tags (lead_id, tag_id)

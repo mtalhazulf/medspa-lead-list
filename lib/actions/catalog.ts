@@ -31,8 +31,7 @@ async function uniqueSlug(
   const supabase = await createClient();
   for (let i = 0; i < 8; i++) {
     const candidate = i === 0 ? base : `${base}-${i + 1}`;
-    let q = supabase.from(table).select("id").eq("slug", candidate).maybeSingle();
-    const { data } = await q;
+    const { data } = await supabase.from(table).select("id").eq("slug", candidate).maybeSingle();
     if (!data || data.id === excludeId) return candidate;
   }
   return `${base}-${Date.now().toString(36)}`;

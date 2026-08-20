@@ -44,9 +44,18 @@ export default async function LeadsPage({
         states={options.states}
         categories={options.categories}
         teammates={teammates}
+        clientTypes={options.clientTypes}
+        tags={options.tags}
       />
 
-      <LeadsTable rows={result.rows} query={query} teammates={teammates} total={result.total} />
+      <LeadsTable
+        rows={result.rows}
+        query={query}
+        teammates={teammates}
+        tags={options.tags}
+        clientTypes={options.clientTypes}
+        total={result.total}
+      />
 
       <Pagination query={query} pageCount={result.pageCount} total={result.total} />
     </div>
