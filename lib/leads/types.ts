@@ -1,7 +1,10 @@
 import type {
   ClientTypeRow,
+  CustomData,
+  CustomFieldRow,
   DashboardStats,
   LeadActivityRow,
+  LeadContactRow,
   LeadRow,
   LeadStatus,
   TagRow,
@@ -13,6 +16,10 @@ export interface OwnerRef {
   email: string | null;
 }
 
+export type CatalogCustomField = Pick<
+  CustomFieldRow,
+  "id" | "name" | "slug" | "field_type" | "show_in_table" | "sort_order"
+>;
 export type CatalogTag = Pick<TagRow, "id" | "name" | "slug" | "color" | "sort_order">;
 export type CatalogClientType = Pick<
   ClientTypeRow,
@@ -37,6 +44,7 @@ export interface LeadListItem {
   contact_name: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  contact_count: number;
   status: LeadStatus;
   priority: number;
   tags: string[];
@@ -46,6 +54,7 @@ export interface LeadListItem {
   updated_at: string;
   instagram: string | null;
   booking_url: string | null;
+  custom_data: CustomData;
   owner: OwnerRef | null;
   client_type: CatalogClientType | null;
 }
@@ -53,10 +62,31 @@ export interface LeadListItem {
 export interface LeadDetail extends LeadRow {
   owner: OwnerRef | null;
   client_type: CatalogClientType | null;
+  contacts: LeadContact[];
 }
+
+export type LeadContact = Pick<
+  LeadContactRow,
+  | "id"
+  | "lead_id"
+  | "full_name"
+  | "title"
+  | "email"
+  | "phone"
+  | "linkedin"
+  | "is_primary"
+  | "do_not_contact"
+  | "notes"
+  | "last_contacted_at"
+  | "sort_order"
+  | "created_at"
+  | "updated_at"
+>;
 
 export interface ActivityItem extends LeadActivityRow {
   user: OwnerRef | null;
+  lead?: { id: string; company_name: string } | null;
+  contact?: { id: string; full_name: string } | null;
 }
 
 export interface Teammate {

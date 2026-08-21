@@ -1,22 +1,59 @@
 export const LABEL_COLORS = [
-  { value: "slate", label: "Slate", pill: "bg-slate-100 text-slate-700 ring-slate-200", dot: "bg-slate-500" },
-  { value: "sky", label: "Sky", pill: "bg-sky-100 text-sky-800 ring-sky-200", dot: "bg-sky-500" },
-  { value: "indigo", label: "Indigo", pill: "bg-indigo-100 text-indigo-800 ring-indigo-200", dot: "bg-indigo-500" },
-  { value: "violet", label: "Violet", pill: "bg-violet-100 text-violet-800 ring-violet-200", dot: "bg-violet-500" },
-  { value: "emerald", label: "Emerald", pill: "bg-emerald-100 text-emerald-800 ring-emerald-200", dot: "bg-emerald-500" },
-  { value: "teal", label: "Teal", pill: "bg-teal-100 text-teal-800 ring-teal-200", dot: "bg-teal-500" },
-  { value: "amber", label: "Amber", pill: "bg-amber-100 text-amber-800 ring-amber-200", dot: "bg-amber-500" },
-  { value: "orange", label: "Orange", pill: "bg-orange-100 text-orange-800 ring-orange-200", dot: "bg-orange-400" },
-  { value: "rose", label: "Rose", pill: "bg-rose-100 text-rose-800 ring-rose-200", dot: "bg-rose-500" },
-  { value: "zinc", label: "Zinc", pill: "bg-zinc-200 text-zinc-800 ring-zinc-300", dot: "bg-zinc-600" },
+  { value: "slate", label: "Slate", hex: "#64748b" },
+  { value: "sky", label: "Sky", hex: "#0ea5e9" },
+  { value: "indigo", label: "Indigo", hex: "#6366f1" },
+  { value: "violet", label: "Violet", hex: "#8b5cf6" },
+  { value: "emerald", label: "Emerald", hex: "#10b981" },
+  { value: "teal", label: "Teal", hex: "#14b8a6" },
+  { value: "amber", label: "Amber", hex: "#d97706" },
+  { value: "orange", label: "Orange", hex: "#ea580c" },
+  { value: "rose", label: "Rose", hex: "#e11d48" },
+  { value: "zinc", label: "Zinc", hex: "#52525b" },
 ] as const;
 
-export type LabelColor = (typeof LABEL_COLORS)[number]["value"];
+export type LabelColorName = (typeof LABEL_COLORS)[number]["value"];
 
-const COLOR_BY_VALUE = new Map(LABEL_COLORS.map((c) => [c.value, c]));
+const HEX_BY_NAME = new Map(LABEL_COLORS.map((c) => [c.value, c.hex]));
 
-export function labelColor(value: string | null | undefined) {
-  return COLOR_BY_VALUE.get((value ?? "slate") as LabelColor) ?? LABEL_COLORS[0];
+const HEX = /^#([0-9a-f]{6})$/i;
+
+export function isHexColor(value: string): boolean {
+  return HEX.test(value);
+}
+
+/** Named palette values and #rrggbb both become a 6-digit hex. */
+export function toLabelHex(value: string | null | undefined): string {
+  const raw = (value ?? "").trim();
+  if (HEX.test(raw)) return `#${raw.slice(1).toLowerCase()}`;
+  return HEX_BY_NAME.get(raw.toLowerCase() as LabelColorName) ?? "#64748b";
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function mixTowardBlack(hex: string, amount: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const t = 1 - amount;
+  const to = (c: number) => Math.round(c * t)
+    .toString(16)
+    .padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+export function labelChipStyle(color: string | null | undefined): {
+  backgroundColor: string;
+  color: string;
+  boxShadow: string;
+} {
+  const hex = toLabelHex(color);
+  const [r, g, b] = hexToRgb(hex);
+  return {
+    backgroundColor: `rgb(${r} ${g} ${b} / 0.14)`,
+    color: mixTowardBlack(hex, 0.42),
+    boxShadow: `inset 0 0 0 1px rgb(${r} ${g} ${b} / 0.32)`,
+  };
 }
 
 export function slugify(input: string): string {
@@ -26,6 +63,18 @@ export function slugify(input: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+/** Machine key for custom fields — letters, numbers, underscores. */
+export function slugifyKey(input: string): string {
+  const slug = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+  if (!slug) return "";
+  return /^[a-z]/.test(slug) ? slug : `f_${slug}`.slice(0, 40);
 }
 
 export const LEAD_SOURCES = [

@@ -11,8 +11,7 @@ Tailwind v4 · deployed to Cloudflare Workers via `@opennextjs/cloudflare`.
 ## 1. Set up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Apply the schema. Either paste `supabase/migrations/20260814090000_init_leads.sql` into the
-   SQL editor, or use the CLI:
+2. Apply every file in `supabase/migrations/` with the CLI:
 
    ```bash
    npx supabase link --project-ref <your-ref>
@@ -41,11 +40,12 @@ The importer reads the spreadsheet's own headers (`Company Name`, `Google Star R
 
 ```bash
 npm run import:leads -- data/sample-leads.csv --dry-run   # parse only, write nothing
-npm run import:leads -- data/leads.csv                    # the real 40k file
+npm run import:leads -- data/leads.csv                    # CSV
+npm run import:leads -- data/leads.xlsx                   # Excel
 npm run import:leads -- data/leads.csv --batch=1000
 ```
 
-Export your sheet as CSV first (`.xlsx` is not read directly). What it does:
+Drop a `.csv` or `.xlsx` in Settings → Import list, or run the CLI. What it does:
 
 - **Idempotent.** Rows upsert on `dedupe_key` (company + street + ZIP), so re-running a refreshed
   scrape updates business data instead of creating duplicates.
@@ -161,5 +161,5 @@ lib/dal/                   server-only data access (auth + leads)
 lib/actions/               Server Actions (validated, authorized)
 lib/leads/query.ts         URL ⇄ filter state, shared by server and client
 supabase/migrations/       schema, triggers, RLS, reporting functions
-scripts/import-leads.mjs   bulk CSV importer
+scripts/import-leads.mjs   bulk CSV / Excel importer
 ```

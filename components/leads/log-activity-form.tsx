@@ -21,9 +21,11 @@ function LogButton() {
 export function LogActivityForm({
   leadId,
   currentStatus,
+  contacts = [],
 }: {
   leadId: string;
   currentStatus: LeadStatus;
+  contacts?: { id: string; full_name: string; title: string | null; do_not_contact: boolean }[];
 }) {
   const [state, formAction] = useActionState(logActivity, INITIAL);
   const formRef = useRef<HTMLFormElement>(null);
@@ -45,7 +47,23 @@ export function LogActivityForm({
         required
       />
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div>
+          <label className="label mb-1" htmlFor="contactId">
+            Person
+          </label>
+          <select id="contactId" name="contactId" className="input" defaultValue="">
+            <option value="">Company / front desk</option>
+            {contacts.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.full_name}
+                {person.title ? ` · ${person.title}` : ""}
+                {person.do_not_contact ? " (DNC)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label className="label mb-1" htmlFor="type">
             Type

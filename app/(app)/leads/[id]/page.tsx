@@ -3,11 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ActivityTimeline } from "@/components/leads/activity-timeline";
+import { CustomDataForm } from "@/components/leads/custom-data-form";
+import { LeadTabs } from "@/components/leads/lead-tabs";
 import { LogActivityForm } from "@/components/leads/log-activity-form";
+import { PeopleList } from "@/components/leads/people-list";
 import { PipelinePanel } from "@/components/leads/pipeline-panel";
 import { LabelChip } from "@/components/label-chip";
 import { listTeammates } from "@/lib/dal/auth";
-import { getLead, listClientTypes, listLeadActivities, listTags } from "@/lib/dal/leads";
+import { getLead, listCustomFields, listClientTypes, listLeadActivities, listTags } from "@/lib/dal/leads";
 import { formatDate, formatNumber, instagramHandle, instagramHref, prettyDomain, telHref, toHref } from "@/lib/format";
 
 export async function generateMetadata({
@@ -20,17 +23,26 @@ export async function generateMetadata({
   return { title: lead?.company_name ?? "Lead" };
 }
 
-export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LeadPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string | string[] }>;
+}) {
   const { id } = await params;
+  const tabParam = (await searchParams).tab;
+  const tab = (Array.isArray(tabParam) ? tabParam[0] : tabParam) === "history" ? "history" : "profile";
 
   const lead = await getLead(id);
   if (!lead) notFound();
 
-  const [activities, teammates, clientTypes, tags] = await Promise.all([
+  const [activities, teammates, clientTypes, tags, customFields] = await Promise.all([
     listLeadActivities(id),
     listTeammates(),
     listClientTypes(),
     listTags(),
+    listCustomFields(),
   ]);
 
   const address = [
@@ -56,8 +68,24 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         ← Back to leads
       </Link>
 
+      <LeadTabs leadId={lead.id} current={tab} />
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {tab === "history" ? (
+            <>
+              <section className="card p-5">
+                <h2 className="text-sm font-semibold text-slate-900">Log activity</h2>
+                <LogActivityForm leadId={lead.id} currentStatus={lead.status} contacts={lead.contacts} />
+              </section>
+              <section className="card p-5">
+                <h2 className="text-sm font-semibold text-slate-900">Who did what</h2>
+                <p className="mt-0.5 text-sm text-slate-500">Every touch, status change, and assignment on this client.</p>
+                <ActivityTimeline items={activities} />
+              </section>
+            </>
+          ) : (
+            <>
           <section className="card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -91,36 +119,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             </div>
 
             <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-              <Field label="Decision maker">
-                {lead.contact_name ? (
-                  <span>
-                    {lead.contact_name}
-                    {lead.contact_title ? ` · ${lead.contact_title}` : ""}
-                  </span>
-                ) : (
-                  <Empty />
-                )}
-              </Field>
-              <Field label="Their phone">
-                {lead.contact_phone ? (
-                  <a href={telHref(lead.contact_phone) ?? "#"} className="hover:underline">
-                    {lead.contact_phone}
-                  </a>
-                ) : (
-                  <Empty />
-                )}
-              </Field>
-              <Field label="Their email">
-                {lead.contact_email ? (
-                  <a href={`mailto:${lead.contact_email}`} className="break-all hover:underline">
-                    {lead.contact_email}
-                  </a>
-                ) : (
-                  <Empty />
-                )}
-              </Field>
-              <Field label="Source">{lead.lead_source || <Empty />}</Field>
-              <Field label="Phone">
+              <Field label="Front desk phone">
                 {tel ? (
                   <a href={tel} className="hover:underline">
                     {lead.phone}
@@ -196,6 +195,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                   <Empty />
                 )}
               </Field>
+              <Field label="Lead source">{lead.lead_source || <Empty />}</Field>
             </dl>
 
             {lead.categories.length > 0 && (
@@ -220,15 +220,17 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             </p>
           </section>
 
-          <section className="card p-5">
-            <h2 className="text-sm font-semibold text-slate-900">Log activity</h2>
-            <LogActivityForm leadId={lead.id} currentStatus={lead.status} />
-          </section>
+          <PeopleList leadId={lead.id} contacts={lead.contacts} />
 
           <section className="card p-5">
-            <h2 className="text-sm font-semibold text-slate-900">History</h2>
-            <ActivityTimeline items={activities} />
+            <h2 className="text-sm font-semibold text-slate-900">Custom data</h2>
+            <p className="mt-0.5 text-sm text-slate-500">Fields configured in Settings for this desk.</p>
+            <div className="mt-4">
+              <CustomDataForm leadId={lead.id} fields={customFields} values={lead.custom_data ?? {}} />
+            </div>
           </section>
+            </>
+          )}
         </div>
 
         <div className="lg:col-span-1">

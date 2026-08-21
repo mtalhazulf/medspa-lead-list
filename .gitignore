@@ -17,6 +17,7 @@ cloudflare-env.d.ts
 
 # data dumps — 40k-row exports do not belong in git
 data/*.csv
+data/*.xlsx
 !data/sample-leads.csv
 
 next-env.d.ts

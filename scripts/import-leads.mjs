@@ -3,7 +3,7 @@
  * Bulk-import the med spa lead sheet into Supabase.
  *
  *   node scripts/import-leads.mjs data/leads.csv
- *   node scripts/import-leads.mjs data/leads.csv --dry-run
+ *   node scripts/import-leads.mjs data/leads.xlsx --dry-run
  *   node scripts/import-leads.mjs data/leads.csv --batch=1000
  *
  * Requires (put them in .env.local, the npm script loads that file):
@@ -15,11 +15,12 @@
  * owner, notes, tags and follow-up dates are never overwritten.
  */
 import { createReadStream } from "node:fs";
-import { basename } from "node:path";
+import { basename, extname } from "node:path";
 import process from "node:process";
 
 import { parse } from "csv-parse";
 import { createClient } from "@supabase/supabase-js";
+import { readSheet } from "read-excel-file/node";
 
 const args = process.argv.slice(2);
 const file = args.find((a) => !a.startsWith("-"));
@@ -27,7 +28,7 @@ const dryRun = args.includes("--dry-run");
 const batchSize = Number(args.find((a) => a.startsWith("--batch="))?.split("=")[1] ?? 500);
 
 if (!file) {
-  console.error("Usage: node scripts/import-leads.mjs <file.csv> [--dry-run] [--batch=500]");
+  console.error("Usage: node scripts/import-leads.mjs <file.csv|file.xlsx> [--dry-run] [--batch=500]");
   process.exit(1);
 }
 
@@ -168,6 +169,30 @@ const dedupeKey = (lead) =>
     (lead.postal_code ?? "").trim().toLowerCase(),
   ].join("|");
 
+function importedPerson(lead) {
+  const fullName = lead.contact_name;
+  const email = lead.contact_email;
+  const phone = lead.contact_phone;
+  if (!fullName && !email && !phone) return null;
+  return {
+    full_name: fullName || email || phone,
+    title: lead.contact_title,
+    email,
+    phone,
+  };
+}
+
+function toCompany(lead) {
+  const {
+    contact_name: _n,
+    contact_title: _t,
+    contact_email: _e,
+    contact_phone: _p,
+    ...company
+  } = lead;
+  return company;
+}
+
 // --- run ------------------------------------------------------------------
 async function flush(batch, stats) {
   if (batch.length === 0) return;
@@ -177,9 +202,10 @@ async function flush(batch, stats) {
     return;
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("leads")
-    .upsert(batch, { onConflict: "dedupe_key", ignoreDuplicates: false });
+    .upsert(batch.map(toCompany), { onConflict: "dedupe_key", ignoreDuplicates: false })
+    .select("id, dedupe_key");
 
   if (error) {
     stats.failed += batch.length;
@@ -187,7 +213,43 @@ async function flush(batch, stats) {
     return;
   }
 
+  const byKey = new Map((data ?? []).map((row) => [row.dedupe_key, row.id]));
+  const people = [];
+  for (const lead of batch) {
+    const person = importedPerson(lead);
+    const leadId = byKey.get(dedupeKey(lead));
+    if (person && leadId) people.push({ lead_id: leadId, ...person });
+  }
+  if (people.length > 0) {
+    const { error: peopleError } = await supabase.rpc("import_lead_people", { p_people: people });
+    if (peopleError && !/import_lead_people|schema cache/i.test(peopleError.message)) {
+      console.error(`  ! people failed: ${peopleError.message}`);
+    }
+  }
+
   stats.upserted += batch.length;
+}
+
+function cellToString(value) {
+  if (value == null) return "";
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+async function* iterateRows(path) {
+  const ext = extname(path).toLowerCase();
+  if (ext === ".xlsx") {
+    const rows = await readSheet(path);
+    for (const row of rows) yield row.map(cellToString);
+    return;
+  }
+  if (ext !== ".csv") {
+    throw new Error("Use a .csv or .xlsx file.");
+  }
+  const parser = createReadStream(path).pipe(
+    parse({ bom: true, skip_empty_lines: true, relax_column_count: true, trim: false }),
+  );
+  for await (const row of parser) yield row;
 }
 
 async function main() {
@@ -197,11 +259,7 @@ async function main() {
   let columns = null;
   let batch = [];
 
-  const parser = createReadStream(file).pipe(
-    parse({ bom: true, skip_empty_lines: true, relax_column_count: true, trim: false }),
-  );
-
-  for await (const row of parser) {
+  for await (const row of iterateRows(file)) {
     if (!columns) {
       columns = buildColumnMap(row);
       if (columns.company_name === undefined) {

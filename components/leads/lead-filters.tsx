@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import {
   buildLeadQueryString,
   hasActiveFilters,
+  panelFilterCount,
   HAS_FLAGS,
   PAGE_SIZES,
   SORT_FIELDS,
@@ -34,19 +35,28 @@ const HAS_LABELS: Record<HasFlag, string> = {
   booking: "Online booking",
 };
 
+const FILTERS_VISIBLE_KEY = "leads-filters-visible";
+
+function IconFilters(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className={props.className}>
+      <path
+        d="M2.5 3.25h11L9.25 8.6v3.65L6.75 13.5V8.6z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function LeadFilters({ query, states, categories, teammates, clientTypes, tags }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState(query.q);
-  const [showAdvanced, setShowAdvanced] = useState(
-    query.minRating !== null ||
-      query.minReviews !== null ||
-      query.maxReviews !== null ||
-      query.minLocations !== null ||
-      query.has.length > 0 ||
-      Boolean(query.category),
-  );
+  const [showFilters, setShowFilters] = useState(true);
   const searchRef = useRef(query.q);
+  const activeFilterCount = panelFilterCount(query);
 
   /** Any filter change resets to page 1 — page numbers are meaningless across filters. */
   function apply(patch: Partial<LeadQuery>) {
@@ -69,6 +79,26 @@ export function LeadFilters({ query, states, categories, teammates, clientTypes,
     searchRef.current = query.q;
     setSearch(query.q);
   }, [query.q]);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(FILTERS_VISIBLE_KEY) === "0") setShowFilters(false);
+    } catch {
+      /* private mode */
+    }
+  }, []);
+
+  function toggleFilters() {
+    setShowFilters((visible) => {
+      const next = !visible;
+      try {
+        localStorage.setItem(FILTERS_VISIBLE_KEY, next ? "1" : "0");
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
+  }
 
   function toggleStatus(status: LeadStatus) {
     const next = query.status.includes(status)
@@ -113,15 +143,6 @@ export function LeadFilters({ query, states, categories, teammates, clientTypes,
           ))}
         </select>
 
-        <button
-          type="button"
-          className="btn-ghost h-9 text-sm"
-          onClick={() => setShowAdvanced((v) => !v)}
-          aria-expanded={showAdvanced}
-        >
-          {showAdvanced ? "Fewer filters" : "More filters"}
-        </button>
-
         {hasActiveFilters(query) && (
           <button
             type="button"
@@ -131,9 +152,27 @@ export function LeadFilters({ query, states, categories, teammates, clientTypes,
             Clear all
           </button>
         )}
+
+        <button
+          type="button"
+          className={`ml-auto h-9 px-2.5 text-sm ${showFilters ? "btn-primary" : "btn-secondary"}`}
+          onClick={toggleFilters}
+          aria-expanded={showFilters}
+          aria-controls="lead-filters-panel"
+        >
+          <IconFilters className="h-4 w-4" />
+          {showFilters ? "Hide filters" : "Filters"}
+          {!showFilters && activeFilterCount > 0 && (
+            <span className="rounded-full bg-slate-900 px-1.5 text-[11px] font-medium leading-4 text-white">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      {showFilters && (
+        <div id="lead-filters-panel">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
         <select
           className="input w-auto"
           value={query.state[0] ?? ""}
@@ -226,8 +265,7 @@ export function LeadFilters({ query, states, categories, teammates, clientTypes,
         })}
       </div>
 
-      {showAdvanced && (
-        <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="label mb-1" htmlFor="min_rating">
               Min rating
@@ -336,6 +374,7 @@ export function LeadFilters({ query, states, categories, teammates, clientTypes,
             </select>
           </div>
         </div>
+      </div>
       )}
     </div>
   );

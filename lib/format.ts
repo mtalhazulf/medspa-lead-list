@@ -101,3 +101,10 @@ export function telHref(phone: string | null | undefined): string | null {
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+export function formatCustomValue(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return numberFmt.format(value);
+  return String(value);
+}

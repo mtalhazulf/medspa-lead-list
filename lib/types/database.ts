@@ -58,7 +58,9 @@ export type LeadRow = {
   contact_title: string | null;
   contact_email: string | null;
   contact_phone: string | null;
+  contact_count: number;
   lead_source: string | null;
+  custom_data: CustomData;
   status: LeadStatus;
   priority: number;
   owner_id: string | null;
@@ -90,6 +92,12 @@ export type LeadInsert = Omit<
   | "next_follow_up_at"
   | "last_contacted_at"
   | "client_type_id"
+  | "custom_data"
+  | "contact_count"
+  | "contact_name"
+  | "contact_title"
+  | "contact_email"
+  | "contact_phone"
 > & {
   id?: string;
   status?: LeadStatus;
@@ -103,6 +111,11 @@ export type LeadInsert = Omit<
   client_type_id?: string | null;
   categories?: string[];
   source?: string;
+  custom_data?: CustomData;
+  contact_name?: string | null;
+  contact_title?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
 };
 
 export type LeadUpdate = Partial<Omit<LeadRow, "id" | "dedupe_key">>;
@@ -110,6 +123,7 @@ export type LeadUpdate = Partial<Omit<LeadRow, "id" | "dedupe_key">>;
 export type LeadActivityRow = {
   id: string;
   lead_id: string;
+  contact_id: string | null;
   user_id: string | null;
   type: ActivityType;
   body: string | null;
@@ -119,9 +133,10 @@ export type LeadActivityRow = {
   created_at: string;
 };
 
-export type LeadActivityInsert = Omit<LeadActivityRow, "id" | "created_at" | "occurred_at"> & {
+export type LeadActivityInsert = Omit<LeadActivityRow, "id" | "created_at" | "occurred_at" | "contact_id"> & {
   id?: string;
   occurred_at?: string;
+  contact_id?: string | null;
 };
 
 export type ProfileRow = {
@@ -150,6 +165,47 @@ export type TagRow = {
   sort_order: number;
   created_at: string;
   updated_at: string;
+};
+
+export type CustomFieldType = "text" | "number" | "date" | "url" | "boolean";
+
+export type CustomFieldRow = {
+  id: string;
+  name: string;
+  slug: string;
+  field_type: CustomFieldType;
+  show_in_table: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CustomData = Record<string, string | number | boolean | null>;
+
+export type LeadContactRow = {
+  id: string;
+  lead_id: string;
+  full_name: string;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  linkedin: string | null;
+  is_primary: boolean;
+  do_not_contact: boolean;
+  notes: string | null;
+  last_contacted_at: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LeadContactInsert = Omit<
+  LeadContactRow,
+  "id" | "created_at" | "updated_at" | "last_contacted_at" | "sort_order"
+> & {
+  id?: string;
+  last_contacted_at?: string | null;
+  sort_order?: number;
 };
 
 export type LeadTagRow = {
@@ -187,6 +243,12 @@ export type Database = {
         Update: Partial<LeadActivityRow>;
         Relationships: [];
       };
+      lead_contacts: {
+        Row: LeadContactRow;
+        Insert: LeadContactInsert;
+        Update: Partial<LeadContactRow>;
+        Relationships: [];
+      };
       profiles: {
         Row: ProfileRow;
         Insert: Partial<ProfileRow> & { id: string };
@@ -209,6 +271,12 @@ export type Database = {
         Row: LeadTagRow;
         Insert: Pick<LeadTagRow, "lead_id" | "tag_id"> & { created_at?: string };
         Update: Partial<LeadTagRow>;
+        Relationships: [];
+      };
+      custom_fields: {
+        Row: CustomFieldRow;
+        Insert: Partial<CustomFieldRow> & { name: string; slug: string };
+        Update: Partial<CustomFieldRow>;
         Relationships: [];
       };
     };
@@ -241,6 +309,10 @@ export type Database = {
       replace_lead_tags: {
         Args: { p_lead_id: string; p_tag_ids: string[] };
         Returns: undefined;
+      };
+      import_lead_people: {
+        Args: { p_people: { lead_id: string; full_name?: string | null; title?: string | null; email?: string | null; phone?: string | null }[] };
+        Returns: number;
       };
     };
     Enums: {

@@ -5,7 +5,7 @@ import { LeadFilters } from "@/components/leads/lead-filters";
 import { LeadsTable } from "@/components/leads/leads-table";
 import { Pagination } from "@/components/leads/pagination";
 import { listTeammates } from "@/lib/dal/auth";
-import { getFilterOptions, listLeads } from "@/lib/dal/leads";
+import { getFilterOptions, listCustomFields, listLeads } from "@/lib/dal/leads";
 import { formatNumber } from "@/lib/format";
 import { hasActiveFilters, parseLeadQuery, type RawSearchParams } from "@/lib/leads/query";
 
@@ -18,10 +18,11 @@ export default async function LeadsPage({
 }) {
   const query = parseLeadQuery(await searchParams);
 
-  const [result, options, teammates] = await Promise.all([
+  const [result, options, teammates, customFields] = await Promise.all([
     listLeads(query),
     getFilterOptions(),
     listTeammates(),
+    listCustomFields(),
   ]);
 
   const from = result.total === 0 ? 0 : (result.page - 1) * result.perPage + 1;
@@ -36,19 +37,20 @@ export default async function LeadsPage({
           <h1 className="text-xl font-semibold tracking-tight text-slate-900">Leads</h1>
           <p className="mt-0.5 text-sm text-slate-500">
             {emptyDesk
-              ? "The list is empty until you import a CSV."
+              ? "The list is empty until you import a spreadsheet."
               : filteredEmpty
                 ? "No leads match these filters"
                 : `Showing ${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(result.total)}`}
           </p>
         </div>
+        {!emptyDesk && <div id="leads-page-actions" className="flex items-center gap-2" />}
       </div>
 
       {emptyDesk ? (
         <section className="card max-w-xl p-6">
           <p className="text-sm font-medium text-slate-900">No leads in the list yet</p>
           <p className="mt-1 text-sm leading-6 text-slate-500">
-            Import the client CSV from Settings, then this table fills in.
+            Import the client CSV or Excel file from Settings, then this table fills in.
           </p>
           <Link href={"/settings?tab=import" as Route} className="btn-primary mt-5">
             Import the list
@@ -71,6 +73,7 @@ export default async function LeadsPage({
             teammates={teammates}
             tags={options.tags}
             clientTypes={options.clientTypes}
+            customFields={customFields}
             total={result.total}
           />
 

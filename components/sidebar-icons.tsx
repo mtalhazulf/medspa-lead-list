@@ -150,3 +150,13 @@ export function IconLeave(props: { className?: string }) {
     </svg>
   );
 }
+
+export function IconHistory(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className={props.className}>
+      <path d="M3.5 8a4.5 4.5 0 1 0 1.2-3.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M3.5 3.25v2.5H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 5.5V8l1.75 1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}

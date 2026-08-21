@@ -4,9 +4,9 @@ import { cache } from "react";
 
 import { requireUser } from "@/lib/dal/auth";
 import { createClient } from "@/lib/supabase/server";
-import { SORT_FIELDS, toPrefixTsQuery, type LeadQuery } from "@/lib/leads/query";
-import type { ActivityItem, LeadDetail, LeadListItem, PipelineNav } from "@/lib/leads/types";
-import type { DashboardStats } from "@/lib/types/database";
+import { SORT_FIELDS, customSortSlug, isBuiltinSort, toPrefixTsQuery, type LeadQuery } from "@/lib/leads/query";
+import type { ActivityItem, CatalogCustomField, LeadContact, LeadDetail, LeadListItem, PipelineNav } from "@/lib/leads/types";
+import type { ActivityType, DashboardStats } from "@/lib/types/database";
 
 export type { ActivityItem, LeadDetail, LeadListItem, PipelineNav };
 
@@ -14,9 +14,9 @@ export type { ActivityItem, LeadDetail, LeadListItem, PipelineNav };
 const LIST_COLUMNS = `
   id, company_name, city, state, postal_code, phone, email, website,
   google_rating, google_reviews, num_locations, primary_category,
-  client_type_id, contact_name, contact_email, contact_phone,
+  client_type_id, contact_name, contact_email, contact_phone, contact_count,
   status, priority, tags, owner_id, next_follow_up_at, last_contacted_at,
-  updated_at, instagram, booking_url,
+  updated_at, instagram, booking_url, custom_data,
   owner:profiles!leads_owner_id_fkey (id, full_name, email)
 ` as const;
 
@@ -78,12 +78,25 @@ export async function listLeads(query: LeadQuery): Promise<LeadListResult> {
     builder = builder.lte("next_follow_up_at", isoDaysFromNow(7)).not("next_follow_up_at", "is", null);
   }
 
-  const sortColumn = SORT_FIELDS[query.sort].column;
+  const fields = await listCustomFields();
   const from = (query.page - 1) * query.perPage;
+  const ascending = query.dir === "asc";
+  const customSlug = customSortSlug(query.sort);
+
+  if (customSlug) {
+    const field = fields.find((f) => f.slug === customSlug);
+    const expr =
+      field?.field_type === "number" || field?.field_type === "boolean"
+        ? `custom_data->${customSlug}`
+        : `custom_data->>${customSlug}`;
+    builder = builder.order(expr, { ascending, nullsFirst: false });
+  } else if (isBuiltinSort(query.sort)) {
+    builder = builder.order(SORT_FIELDS[query.sort].column, { ascending, nullsFirst: false });
+  } else {
+    builder = builder.order("updated_at", { ascending: false, nullsFirst: false });
+  }
 
   const { data, error, count } = await builder
-    .order(sortColumn, { ascending: query.dir === "asc", nullsFirst: false })
-    // Deterministic tie-break so pagination never repeats or skips a row.
     .order("id", { ascending: true })
     .range(from, from + query.perPage - 1);
 
@@ -95,6 +108,8 @@ export async function listLeads(query: LeadQuery): Promise<LeadListResult> {
   return {
     rows: ((data ?? []) as unknown as LeadListItem[]).map((row) => ({
       ...row,
+      custom_data: row.custom_data ?? {},
+      contact_count: row.contact_count ?? 0,
       client_type: row.client_type_id ? (typeById.get(row.client_type_id) ?? null) : null,
     })),
     total,
@@ -132,29 +147,100 @@ export const getLead = cache(async (id: string): Promise<LeadDetail | null> => {
   if (error) throw new Error(`Failed to load lead: ${error.message}`);
   if (!data) return null;
 
-  const types = await listClientTypes();
+  const [types, contacts] = await Promise.all([listClientTypes(), listLeadContacts(id)]);
   const lead = data as unknown as LeadDetail;
   return {
     ...lead,
+    custom_data: lead.custom_data ?? {},
+    contact_count: lead.contact_count ?? contacts.length,
     client_type: lead.client_type_id
       ? (types.find((t) => t.id === lead.client_type_id) ?? null)
       : null,
+    contacts,
   };
 });
 
-export async function listLeadActivities(leadId: string, limit = 100): Promise<ActivityItem[]> {
+export async function listLeadContacts(leadId: string): Promise<LeadContact[]> {
+  await requireUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("lead_contacts")
+    .select(
+      "id, lead_id, full_name, title, email, phone, linkedin, is_primary, do_not_contact, notes, last_contacted_at, sort_order, created_at, updated_at",
+    )
+    .eq("lead_id", leadId)
+    .order("is_primary", { ascending: false })
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    if (/lead_contacts|schema cache/i.test(error.message)) return [];
+    throw new Error(`Failed to load contacts: ${error.message}`);
+  }
+  return (data ?? []) as LeadContact[];
+}
+
+export async function listLeadActivities(leadId: string, limit = 200): Promise<ActivityItem[]> {
   await requireUser();
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("lead_activities")
-    .select("*, user:profiles!lead_activities_user_id_fkey (id, full_name, email)")
+    .select(
+      "*, user:profiles!lead_activities_user_id_fkey (id, full_name, email), contact:lead_contacts!lead_activities_contact_id_fkey (id, full_name)",
+    )
     .eq("lead_id", leadId)
     .order("occurred_at", { ascending: false })
     .limit(limit);
 
-  if (error) throw new Error(`Failed to load activity: ${error.message}`);
+  if (error) {
+    if (/contact|lead_contacts|schema cache/i.test(error.message)) {
+      const retry = await supabase
+        .from("lead_activities")
+        .select("*, user:profiles!lead_activities_user_id_fkey (id, full_name, email)")
+        .eq("lead_id", leadId)
+        .order("occurred_at", { ascending: false })
+        .limit(limit);
+      if (retry.error) throw new Error(`Failed to load activity: ${retry.error.message}`);
+      return (retry.data ?? []) as unknown as ActivityItem[];
+    }
+    throw new Error(`Failed to load activity: ${error.message}`);
+  }
   return (data ?? []) as unknown as ActivityItem[];
+}
+
+export async function listTeamActivity(options: {
+  page?: number;
+  perPage?: number;
+  type?: string;
+}): Promise<{ rows: ActivityItem[]; total: number; page: number; pageCount: number }> {
+  await requireUser();
+  const supabase = await createClient();
+  const page = Math.max(1, options.page ?? 1);
+  const perPage = options.perPage ?? 40;
+  const from = (page - 1) * perPage;
+
+  let builder = supabase
+    .from("lead_activities")
+    .select(
+      "*, user:profiles!lead_activities_user_id_fkey (id, full_name, email), lead:leads!lead_activities_lead_id_fkey (id, company_name), contact:lead_contacts!lead_activities_contact_id_fkey (id, full_name)",
+      { count: "exact" },
+    );
+
+  if (options.type) builder = builder.eq("type", options.type as ActivityType);
+
+  const { data, error, count } = await builder
+    .order("occurred_at", { ascending: false })
+    .range(from, from + perPage - 1);
+
+  if (error) throw new Error(`Failed to load history: ${error.message}`);
+  const total = count ?? 0;
+  return {
+    rows: (data ?? []) as unknown as ActivityItem[],
+    total,
+    page,
+    pageCount: Math.max(1, Math.ceil(total / perPage)),
+  };
 }
 
 const EMPTY_STATS: DashboardStats = {
@@ -207,7 +293,9 @@ export async function getDashboardData(): Promise<DashboardData> {
     supabase.rpc("lead_state_counts", { limit_count: 10 }),
     supabase
       .from("lead_activities")
-      .select("*, user:profiles!lead_activities_user_id_fkey (id, full_name, email)")
+      .select(
+        "*, user:profiles!lead_activities_user_id_fkey (id, full_name, email), contact:lead_contacts!lead_activities_contact_id_fkey (id, full_name)",
+      )
       .order("occurred_at", { ascending: false })
       .limit(12),
     supabase
@@ -260,6 +348,21 @@ export const listClientTypes = cache(async () => {
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
   if (error) throw new Error(`Failed to load client types: ${error.message}`);
+  return data ?? [];
+});
+
+export const listCustomFields = cache(async (): Promise<CatalogCustomField[]> => {
+  await requireUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("custom_fields")
+    .select("id, name, slug, field_type, show_in_table, sort_order")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+  if (error) {
+    if (/custom_fields|schema cache/i.test(error.message)) return [];
+    throw new Error(`Failed to load custom fields: ${error.message}`);
+  }
   return data ?? [];
 });
 

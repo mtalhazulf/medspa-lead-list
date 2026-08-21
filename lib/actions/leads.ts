@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/dal/auth";
-import { listLeadIdsForQuery } from "@/lib/dal/leads";
+import { listCustomFields, listLeadIdsForQuery } from "@/lib/dal/leads";
 import { parseLeadQuery, type RawSearchParams } from "@/lib/leads/query";
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUSES, MANUAL_ACTIVITY_TYPES } from "@/lib/pipeline";
@@ -52,10 +52,6 @@ const detailsSchema = z.object({
   clientTypeId: z.string().trim(),
   nextFollowUpAt: optionalText,
   dealValue: optionalNumber,
-  contactName: z.string().trim().max(120),
-  contactTitle: z.string().trim().max(80),
-  contactEmail: z.string().trim().max(160),
-  contactPhone: z.string().trim().max(40),
   leadSource: z.string().trim().max(40),
   notes: z.string().trim().max(20_000),
 });
@@ -74,10 +70,6 @@ export async function saveLeadDetails(
     clientTypeId: formData.get("clientTypeId") ?? "",
     nextFollowUpAt: formData.get("nextFollowUpAt") ?? "",
     dealValue: formData.get("dealValue") ?? "",
-    contactName: formData.get("contactName") ?? "",
-    contactTitle: formData.get("contactTitle") ?? "",
-    contactEmail: formData.get("contactEmail") ?? "",
-    contactPhone: formData.get("contactPhone") ?? "",
     leadSource: formData.get("leadSource") ?? "",
     notes: formData.get("notes") ?? "",
   });
@@ -101,10 +93,6 @@ export async function saveLeadDetails(
     client_type_id: clientTypeId === "" ? null : clientTypeId,
     next_follow_up_at: rest.nextFollowUpAt,
     deal_value: rest.dealValue,
-    contact_name: rest.contactName || null,
-    contact_title: rest.contactTitle || null,
-    contact_email: rest.contactEmail || null,
-    contact_phone: rest.contactPhone || null,
     lead_source: rest.leadSource || null,
     notes: rest.notes === "" ? null : rest.notes,
   };
@@ -122,8 +110,47 @@ export async function saveLeadDetails(
   return { ok: true, message: "Saved" };
 }
 
+export async function saveLeadCustomData(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  await requireUser();
+  const leadId = uuid.safeParse(formData.get("leadId"));
+  if (!leadId.success) return { ok: false, message: "Invalid lead" };
+
+  const fields = await listCustomFields();
+  const custom_data: Record<string, string | number | boolean | null> = {};
+
+  for (const field of fields) {
+    const raw = String(formData.get(`cf_${field.slug}`) ?? "").trim();
+    if (raw === "") {
+      custom_data[field.slug] = null;
+      continue;
+    }
+    if (field.field_type === "number") {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return { ok: false, message: `${field.name} must be a number` };
+      custom_data[field.slug] = n;
+    } else if (field.field_type === "boolean") {
+      custom_data[field.slug] = raw === "true";
+    } else if (field.field_type === "url") {
+      custom_data[field.slug] = raw.slice(0, 500);
+    } else {
+      custom_data[field.slug] = raw.slice(0, 500);
+    }
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("leads").update({ custom_data }).eq("id", leadId.data);
+  if (error) return { ok: false, message: error.message };
+
+  revalidateLead(leadId.data);
+  return { ok: true, message: "Custom data saved" };
+}
+
 const activitySchema = z.object({
   leadId: uuid,
+  contactId: z.string().trim(),
   type: activityEnum,
   body: z.string().trim().min(1, "Write something first").max(10_000),
   occurredAt: z.string().trim(),
@@ -136,6 +163,7 @@ export async function logActivity(_prev: ActionState, formData: FormData): Promi
 
   const parsed = activitySchema.safeParse({
     leadId: formData.get("leadId"),
+    contactId: formData.get("contactId") ?? "",
     type: formData.get("type"),
     body: formData.get("body") ?? "",
     occurredAt: formData.get("occurredAt") ?? "",
@@ -147,11 +175,26 @@ export async function logActivity(_prev: ActionState, formData: FormData): Promi
     return { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const { leadId, type, body, occurredAt, nextFollowUpAt, status } = parsed.data;
+  const { leadId, contactId, type, body, occurredAt, nextFollowUpAt, status } = parsed.data;
   const supabase = await createClient();
+
+  let personId: string | null = null;
+  if (contactId) {
+    const parsedContact = uuid.safeParse(contactId);
+    if (!parsedContact.success) return { ok: false, message: "Invalid person" };
+    const { data: person } = await supabase
+      .from("lead_contacts")
+      .select("id")
+      .eq("id", parsedContact.data)
+      .eq("lead_id", leadId)
+      .maybeSingle();
+    if (!person) return { ok: false, message: "That person is not on this company." };
+    personId = person.id;
+  }
 
   const { error } = await supabase.from("lead_activities").insert({
     lead_id: leadId,
+    contact_id: personId,
     user_id: user.id,
     type,
     body,

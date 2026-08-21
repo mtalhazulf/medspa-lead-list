@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/dal/auth";
-import { LABEL_COLORS, slugify } from "@/lib/leads/labels";
+import { toLabelHex, slugify } from "@/lib/leads/labels";
 import { createClient } from "@/lib/supabase/server";
 
 export interface CatalogState {
@@ -12,7 +12,10 @@ export interface CatalogState {
   message: string;
 }
 
-const colorEnum = z.enum(LABEL_COLORS.map((c) => c.value) as [string, ...string[]]);
+const colorValue = z
+  .string()
+  .trim()
+  .transform((value) => toLabelHex(value));
 
 function revalidateCatalog() {
   revalidatePath("/settings");
@@ -39,7 +42,7 @@ async function uniqueSlug(
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Enter a name").max(60),
-  color: colorEnum.default("slate"),
+  color: colorValue.default("#64748b"),
   description: z.string().trim().max(160).optional(),
 });
 
@@ -109,7 +112,7 @@ export async function createClientType(
 const updateSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(60),
-  color: colorEnum,
+  color: colorValue,
   description: z.string().trim().max(160).optional(),
 });
 

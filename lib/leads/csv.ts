@@ -1,5 +1,5 @@
 /**
- * Shared CSV mapping for the Settings importer and the CLI script.
+ * Shared spreadsheet mapping for the Settings importer and the CLI script.
  * Headers match loosely: case, spaces and punctuation are ignored.
  */
 
@@ -227,9 +227,23 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-export function parseLeadCsv(csvText: string, filename: string): CsvParseResult {
-  const table = parseCsv(csvText);
-  const headers = table[0];
+export function importedPerson(lead: Pick<ScrapedLead, "contact_name" | "contact_title" | "contact_email" | "contact_phone">) {
+  const full_name = text(lead.contact_name);
+  const email = text(lead.contact_email)?.toLowerCase() ?? null;
+  const phone = text(lead.contact_phone);
+  const title = text(lead.contact_title);
+  if (!full_name && !email && !phone) return null;
+  return {
+    full_name: (full_name ?? email ?? phone)!.slice(0, 120),
+    title: title?.slice(0, 80) ?? null,
+    email: email?.slice(0, 160) ?? null,
+    phone: phone?.slice(0, 40) ?? null,
+  };
+}
+
+export function parseLeadTable(table: string[][], filename: string): CsvParseResult {
+  const start = table.findIndex((row) => row.some((cell) => String(cell ?? "").trim() !== ""));
+  const headers = start >= 0 ? table[start] : undefined;
   if (!headers || headers.length < 2) {
     return { ok: false, message: "This file has no header row." };
   }
@@ -248,7 +262,7 @@ export function parseLeadCsv(csvText: string, filename: string): CsvParseResult 
   let skipped = 0;
   let duplicates = 0;
 
-  for (const row of table.slice(1)) {
+  for (const row of table.slice(start + 1)) {
     if (leads.length >= IMPORT_MAX_ROWS) break;
     const lead = rowToLead(row, columns, filename);
     if (!lead) {
@@ -278,4 +292,8 @@ export function parseLeadCsv(csvText: string, filename: string): CsvParseResult 
     duplicates,
     mapped: Object.keys(columns),
   };
+}
+
+export function parseLeadCsv(csvText: string, filename: string): CsvParseResult {
+  return parseLeadTable(parseCsv(csvText), filename);
 }

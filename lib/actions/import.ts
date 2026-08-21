@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/dal/auth";
-import { IMPORT_BATCH_SIZE } from "@/lib/leads/csv";
+import { IMPORT_BATCH_SIZE, dedupeKey, importedPerson } from "@/lib/leads/csv";
 import { createClient } from "@/lib/supabase/server";
 import type { LeadInsert } from "@/lib/types/database";
 
@@ -94,22 +94,35 @@ export async function importLeadBatch(
     facebook: row.facebook,
     tiktok: row.tiktok,
     booking_url: row.booking_url,
-    contact_name: row.contact_name,
-    contact_title: row.contact_title,
-    contact_email: row.contact_email,
-    contact_phone: row.contact_phone,
     lead_source: row.lead_source,
     source: row.source,
   }));
 
   const supabase = await createClient();
-  const { error } = await supabase.from("leads").upsert(payload, {
-    onConflict: "dedupe_key",
-    ignoreDuplicates: false,
-  });
+  const { data, error } = await supabase
+    .from("leads")
+    .upsert(payload, {
+      onConflict: "dedupe_key",
+      ignoreDuplicates: false,
+    })
+    .select("id, dedupe_key");
 
   if (error) {
     return { ok: false, upserted: 0, failed: payload.length, message: error.message };
+  }
+
+  const byKey = new Map((data ?? []).map((row) => [row.dedupe_key, row.id]));
+  const people = parsed.data.flatMap((row) => {
+    const person = importedPerson(row);
+    const leadId = byKey.get(dedupeKey(row));
+    if (!person || !leadId) return [];
+    return [{ lead_id: leadId, ...person }];
+  });
+  if (people.length > 0) {
+    const { error: peopleError } = await supabase.rpc("import_lead_people", { p_people: people });
+    if (peopleError && !/import_lead_people|schema cache/i.test(peopleError.message)) {
+      return { ok: false, upserted: 0, failed: payload.length, message: peopleError.message };
+    }
   }
 
   if (options.finalize) {

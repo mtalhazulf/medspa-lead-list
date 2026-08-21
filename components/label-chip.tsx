@@ -1,4 +1,4 @@
-import { labelColor } from "@/lib/leads/labels";
+import { labelChipStyle } from "@/lib/leads/labels";
 
 export function LabelChip({
   name,
@@ -9,8 +9,12 @@ export function LabelChip({
   color?: string | null;
   className?: string;
 }) {
-  const meta = labelColor(color);
   return (
-    <span className={`pill ${meta.pill} ${className}`.trim()}>{name}</span>
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${className}`.trim()}
+      style={labelChipStyle(color)}
+    >
+      {name}
+    </span>
   );
 }

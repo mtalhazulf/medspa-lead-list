@@ -177,58 +177,6 @@ export function PipelinePanel({
         )}
       </fieldset>
 
-      <div className="grid gap-3">
-        <div>
-          <label className="label mb-1" htmlFor="contactName">
-            Decision maker
-          </label>
-          <input
-            id="contactName"
-            name="contactName"
-            className="input"
-            defaultValue={lead.contact_name ?? ""}
-            placeholder="Name"
-          />
-        </div>
-        <div>
-          <label className="label mb-1" htmlFor="contactTitle">
-            Title
-          </label>
-          <input
-            id="contactTitle"
-            name="contactTitle"
-            className="input"
-            defaultValue={lead.contact_title ?? ""}
-            placeholder="Owner, office manager…"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label mb-1" htmlFor="contactEmail">
-              Their email
-            </label>
-            <input
-              id="contactEmail"
-              name="contactEmail"
-              type="email"
-              className="input"
-              defaultValue={lead.contact_email ?? ""}
-            />
-          </div>
-          <div>
-            <label className="label mb-1" htmlFor="contactPhone">
-              Their phone
-            </label>
-            <input
-              id="contactPhone"
-              name="contactPhone"
-              className="input"
-              defaultValue={lead.contact_phone ?? ""}
-            />
-          </div>
-        </div>
-      </div>
-
       <div>
         <label className="label mb-1" htmlFor="notes">
           Notes
@@ -239,7 +187,7 @@ export function PipelinePanel({
           rows={6}
           defaultValue={lead.notes ?? ""}
           className="input resize-y"
-          placeholder="Decision maker, current stack, objections…"
+          placeholder="Current stack, objections, what they asked for…"
         />
       </div>
 

@@ -14,7 +14,7 @@ import {
   type CatalogState,
 } from "@/lib/actions/catalog";
 import { LabelChip } from "@/components/label-chip";
-import { LABEL_COLORS } from "@/lib/leads/labels";
+import { ColorPicker } from "@/components/settings/color-picker";
 import type { CatalogClientType, CatalogTag } from "@/lib/leads/types";
 
 const INITIAL: CatalogState = { ok: true, message: "" };
@@ -51,26 +51,20 @@ export function TagCatalog({ tags }: { tags: CatalogTag[] }) {
         </div>
       </div>
 
-      <form action={action} className="mt-4 flex flex-wrap items-end gap-2">
-        <div className="min-w-[12rem] flex-1">
-          <label className="label mb-1" htmlFor="tag-name">
-            New tag
-          </label>
-          <input id="tag-name" name="name" className="input" placeholder="e.g. Hot, Chain, Referral" required />
+      <form action={action} className="mt-4 space-y-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[12rem] flex-1">
+            <label className="label mb-1" htmlFor="tag-name">
+              New tag
+            </label>
+            <input id="tag-name" name="name" className="input" placeholder="e.g. Hot, Chain, Referral" required />
+          </div>
+          <AddButton label="Add tag" />
         </div>
         <div>
-          <label className="label mb-1" htmlFor="tag-color">
-            Color
-          </label>
-          <select id="tag-color" name="color" className="input w-auto" defaultValue="slate">
-            {LABEL_COLORS.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+          <span className="label mb-1">Color</span>
+          <ColorPicker name="color" defaultValue="slate" />
         </div>
-        <AddButton label="Add tag" />
       </form>
       {state.message && (
         <p className={`mt-2 text-sm ${state.ok ? "text-emerald-700" : "text-rose-700"}`}>{state.message}</p>
@@ -106,7 +100,7 @@ export function ClientTypeCatalog({ types }: { types: CatalogClientType[] }) {
         </p>
       </div>
 
-      <form action={action} className="mt-4 flex flex-col gap-2">
+      <form action={action} className="mt-4 space-y-3">
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-40 flex-1">
             <label className="label mb-1" htmlFor="type-name">
@@ -114,19 +108,11 @@ export function ClientTypeCatalog({ types }: { types: CatalogClientType[] }) {
             </label>
             <input id="type-name" name="name" className="input" placeholder="e.g. Med spa" required />
           </div>
-          <div>
-            <label className="label mb-1" htmlFor="type-color">
-              Color
-            </label>
-            <select id="type-color" name="color" className="input w-auto" defaultValue="emerald">
-              {LABEL_COLORS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
           <AddButton label="Add type" />
+        </div>
+        <div>
+          <span className="label mb-1">Color</span>
+          <ColorPicker name="color" defaultValue="emerald" />
         </div>
         <div>
           <label className="label mb-1" htmlFor="type-desc">
@@ -211,32 +197,28 @@ function CatalogRow({
 
   return (
     <li className="py-3">
-      <form action={action} className="flex flex-wrap items-end gap-2">
+      <form action={action} className="space-y-3">
         <input type="hidden" name="id" value={id} />
-        <div className="min-w-[10rem] flex-1">
-          <label className="label mb-1">Name</label>
-          <input name="name" className="input" defaultValue={name} required />
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[10rem] flex-1">
+            <label className="label mb-1">Name</label>
+            <input name="name" className="input" defaultValue={name} required />
+          </div>
+          {kind === "type" && (
+            <div className="min-w-[10rem] flex-1">
+              <label className="label mb-1">Description</label>
+              <input name="description" className="input" defaultValue={description ?? ""} />
+            </div>
+          )}
+          <SaveRowButton />
+          <button type="button" className="btn-ghost text-xs" onClick={() => setEditing(false)}>
+            Cancel
+          </button>
         </div>
         <div>
-          <label className="label mb-1">Color</label>
-          <select name="color" className="input w-auto" defaultValue={color}>
-            {LABEL_COLORS.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+          <span className="label mb-1">Color</span>
+          <ColorPicker name="color" defaultValue={color} />
         </div>
-        {kind === "type" && (
-          <div className="min-w-[10rem] flex-1">
-            <label className="label mb-1">Description</label>
-            <input name="description" className="input" defaultValue={description ?? ""} />
-          </div>
-        )}
-        <SaveRowButton />
-        <button type="button" className="btn-ghost text-xs" onClick={() => setEditing(false)}>
-          Cancel
-        </button>
       </form>
       {state.message && (
         <p className={`mt-1 text-xs ${state.ok ? "text-emerald-700" : "text-rose-700"}`}>{state.message}</p>

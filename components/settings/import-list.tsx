@@ -9,6 +9,7 @@ import {
   parseLeadCsv,
   type ScrapedLead,
 } from "@/lib/leads/csv";
+import { parseLeadXlsx } from "@/lib/leads/xlsx";
 import { formatNumber } from "@/lib/format";
 
 type ReadyFile = {
@@ -20,12 +21,22 @@ type ReadyFile = {
   mapped: string[];
 };
 
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function fileKind(file: File): "csv" | "xlsx" | null {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".csv") || file.type === "text/csv" || file.type === "application/csv") return "csv";
+  if (name.endsWith(".xlsx") || file.type === XLSX_MIME) return "xlsx";
+  return null;
+}
+
 export function ImportList() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState<ReadyFile | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
@@ -34,35 +45,43 @@ export function ImportList() {
     setResult(null);
     setProgress(null);
     setReady(null);
+    setReading(true);
 
-    if (!file.name.toLowerCase().endsWith(".csv") && file.type !== "text/csv") {
-      setError("Use a .csv export. Excel files need to be saved as CSV first.");
-      return;
-    }
-    if (file.size > IMPORT_MAX_BYTES) {
-      setError("That file is larger than 40 MB. Split it, or use the CLI importer for very large lists.");
-      return;
-    }
+    try {
+      const kind = fileKind(file);
+      if (!kind) {
+        setError("Use a .csv or .xlsx file.");
+        return;
+      }
+      if (file.size > IMPORT_MAX_BYTES) {
+        setError("That file is larger than 40 MB. Split it, or use the CLI importer for very large lists.");
+        return;
+      }
 
-    const text = await file.text();
-    const parsed = parseLeadCsv(text, file.name);
-    if (!parsed.ok) {
-      setError(parsed.message);
-      return;
-    }
-    if (parsed.leads.length === 0) {
-      setError("No client rows found after reading the header.");
-      return;
-    }
+      const parsed =
+        kind === "csv"
+          ? parseLeadCsv(await file.text(), file.name)
+          : await parseLeadXlsx(await file.arrayBuffer(), file.name);
+      if (!parsed.ok) {
+        setError(parsed.message);
+        return;
+      }
+      if (parsed.leads.length === 0) {
+        setError("No client rows found after reading the header.");
+        return;
+      }
 
-    setReady({
-      name: file.name,
-      size: file.size,
-      leads: parsed.leads,
-      skipped: parsed.skipped,
-      duplicates: parsed.duplicates,
-      mapped: parsed.mapped,
-    });
+      setReady({
+        name: file.name,
+        size: file.size,
+        leads: parsed.leads,
+        skipped: parsed.skipped,
+        duplicates: parsed.duplicates,
+        mapped: parsed.mapped,
+      });
+    } finally {
+      setReading(false);
+    }
   }
 
   async function runImport() {
@@ -72,7 +91,6 @@ export function ImportList() {
     setResult(null);
 
     let upserted = 0;
-    let failed = 0;
     const total = ready.leads.length;
 
     for (let i = 0; i < total; i += IMPORT_BATCH_SIZE) {
@@ -80,7 +98,6 @@ export function ImportList() {
       const finalize = i + IMPORT_BATCH_SIZE >= total;
       const outcome = await importLeadBatch(batch, { finalize });
       if (!outcome.ok) {
-        failed += outcome.failed || batch.length;
         setError(outcome.message);
         setBusy(false);
         setProgress({ done: upserted, total });
@@ -101,7 +118,7 @@ export function ImportList() {
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,text/csv"
+        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         className="sr-only"
         onChange={(event) => {
           const file = event.target.files?.[0];
@@ -126,17 +143,17 @@ export function ImportList() {
           dragOver ? "border-slate-900 bg-slate-50" : "border-slate-300 bg-slate-50/60"
         }`}
       >
-        <p className="text-sm font-medium text-slate-900">Drop the client CSV here</p>
+        <p className="text-sm font-medium text-slate-900">Drop the client list here</p>
         <p className="mt-1 text-sm text-slate-500">
-          Spreadsheet export with a Company Name column. Same file can be imported again.
+          CSV or Excel (.xlsx) with a Company Name column. Same file can be imported again.
         </p>
         <button
           type="button"
           className="btn-secondary mt-4"
           onClick={() => inputRef.current?.click()}
-          disabled={busy}
+          disabled={busy || reading}
         >
-          Choose CSV
+          {reading ? "Reading file…" : "Choose file"}
         </button>
       </div>
 

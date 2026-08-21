@@ -15,6 +15,7 @@ import {
   IconClock,
   IconGear,
   IconGrid,
+  IconHistory,
   IconInbox,
   IconLeave,
   IconList,
@@ -137,6 +138,13 @@ export function AppSidebar({
           icon={<IconList className="h-4 w-4" />}
           label="All leads"
           count={nav.stats.total}
+          onNavigate={onNavigate}
+        />
+        <TrackLink
+          href="/history"
+          active={pathname === "/history"}
+          icon={<IconHistory className="h-4 w-4" />}
+          label="History"
           onNavigate={onNavigate}
         />
 

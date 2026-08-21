@@ -5,7 +5,7 @@ export const SETTINGS_TABS = [
   {
     id: "import",
     label: "Import list",
-    description: "Drop a client CSV to fill or refresh the desk.",
+    description: "Drop a client CSV or Excel file to fill or refresh the desk.",
   },
   {
     id: "types",
@@ -16,6 +16,11 @@ export const SETTINGS_TABS = [
     id: "tags",
     label: "Tags",
     description: "Shared labels the team applies on the list, including in bulk.",
+  },
+  {
+    id: "fields",
+    label: "Custom data",
+    description: "Extra fields on every client, shown on the profile and optionally as list columns.",
   },
 ] as const;
 

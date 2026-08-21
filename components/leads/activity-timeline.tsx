@@ -2,10 +2,18 @@ import { StatusPill } from "@/components/status-pill";
 import { formatDateTime } from "@/lib/format";
 import type { ActivityItem } from "@/lib/leads/types";
 import { activityMeta } from "@/lib/pipeline";
+import type { Route } from "next";
+import Link from "next/link";
 
-export function ActivityTimeline({ items }: { items: ActivityItem[] }) {
+export function ActivityTimeline({
+  items,
+  showClient = false,
+}: {
+  items: ActivityItem[];
+  showClient?: boolean;
+}) {
   if (items.length === 0) {
-    return <p className="mt-3 text-sm text-slate-500">Nothing logged for this lead yet.</p>;
+    return <p className="mt-3 text-sm text-slate-500">Nothing logged yet.</p>;
   }
 
   return (
@@ -27,6 +35,19 @@ export function ActivityTimeline({ items }: { items: ActivityItem[] }) {
                   {item.user?.full_name ?? item.user?.email ?? "System"}
                 </span>
                 <span className="text-slate-500">{meta.label.toLowerCase()}</span>
+                {item.contact && (
+                  <span className="text-slate-600">
+                    with {item.contact.full_name}
+                  </span>
+                )}
+                {showClient && item.lead && (
+                  <Link
+                    href={`/leads/${item.lead.id}?tab=history` as Route}
+                    className="font-medium text-slate-700 hover:underline"
+                  >
+                    {item.lead.company_name}
+                  </Link>
+                )}
                 <span className="text-xs text-slate-400">{formatDateTime(item.occurred_at)}</span>
               </div>
 

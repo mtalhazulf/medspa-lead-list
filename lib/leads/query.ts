@@ -8,25 +8,35 @@ export const SORT_FIELDS = {
   updated: { column: "updated_at", label: "Last updated" },
   created: { column: "created_at", label: "Recently added" },
   name: { column: "company_name", label: "Company name" },
+  type: { column: "lead_type_name", label: "Client type" },
+  contact: { column: "lead_contact_sort", label: "Contact" },
   reviews: { column: "google_reviews", label: "Google reviews" },
   rating: { column: "google_rating", label: "Google rating" },
   locations: { column: "num_locations", label: "Locations" },
+  status: { column: "status", label: "Status" },
+  owner: { column: "lead_owner_name", label: "Owner" },
   follow_up: { column: "next_follow_up_at", label: "Follow-up date" },
   contacted: { column: "last_contacted_at", label: "Last contacted" },
-} as const satisfies Record<string, { column: keyof LeadSortableColumns; label: string }>;
+} as const satisfies Record<string, { column: string; label: string }>;
 
-type LeadSortableColumns = {
-  updated_at: string;
-  created_at: string;
-  company_name: string;
-  google_reviews: number | null;
-  google_rating: number | null;
-  num_locations: number | null;
-  next_follow_up_at: string | null;
-  last_contacted_at: string | null;
-};
+export type BuiltinSortKey = keyof typeof SORT_FIELDS;
+export type SortKey = BuiltinSortKey | `cf:${string}`;
 
-export type SortKey = keyof typeof SORT_FIELDS;
+const CUSTOM_SORT = /^cf:([a-z][a-z0-9_]{0,39})$/;
+
+export function customSortSlug(sort: string): string | null {
+  return CUSTOM_SORT.exec(sort)?.[1] ?? null;
+}
+
+export function isBuiltinSort(sort: string): sort is BuiltinSortKey {
+  return Object.prototype.hasOwnProperty.call(SORT_FIELDS, sort);
+}
+
+export function parseSortKey(value: string): SortKey {
+  if (isBuiltinSort(value)) return value;
+  if (customSortSlug(value)) return value as SortKey;
+  return "updated";
+}
 
 export const PAGE_SIZES = [25, 50, 100, 200] as const;
 export type PageSize = (typeof PAGE_SIZES)[number];
@@ -81,8 +91,7 @@ function num(value: string | string[] | undefined): number | null {
 }
 
 export function parseLeadQuery(params: RawSearchParams): LeadQuery {
-  const sortParam = first(params.sort);
-  const sort: SortKey = sortParam in SORT_FIELDS ? (sortParam as SortKey) : "updated";
+  const sort = parseSortKey(first(params.sort));
 
   const dirParam = first(params.dir);
   const dir = dirParam === "asc" || dirParam === "desc" ? dirParam : defaultDirection(sort);
@@ -118,8 +127,11 @@ export function parseLeadQuery(params: RawSearchParams): LeadQuery {
   };
 }
 
-function defaultDirection(sort: SortKey): "asc" | "desc" {
-  return sort === "name" || sort === "follow_up" ? "asc" : "desc";
+export function defaultDirection(sort: SortKey): "asc" | "desc" {
+  if (customSortSlug(sort)) return "asc";
+  return sort === "name" || sort === "type" || sort === "contact" || sort === "owner" || sort === "follow_up" || sort === "status"
+    ? "asc"
+    : "desc";
 }
 
 /**
@@ -173,21 +185,24 @@ export const EMPTY_QUERY: LeadQuery = {
 };
 
 export function hasActiveFilters(query: LeadQuery): boolean {
-  return Boolean(
-    query.q ||
-      query.status.length ||
-      query.state.length ||
-      query.owner ||
-      query.category ||
-      query.clientType ||
-      query.tag ||
-      query.minRating !== null ||
-      query.minReviews !== null ||
-      query.maxReviews !== null ||
-      query.minLocations !== null ||
-      query.has.length ||
-      query.due,
-  );
+  return Boolean(query.q || panelFilterCount(query) > 0);
+}
+
+/** Facets shown in the filter panel — search lives in the always-visible box. */
+export function panelFilterCount(query: LeadQuery): number {
+  return [
+    query.status.length > 0,
+    query.state.length > 0,
+    Boolean(query.owner),
+    Boolean(query.category),
+    Boolean(query.clientType),
+    Boolean(query.tag),
+    query.minRating !== null,
+    query.minReviews !== null || query.maxReviews !== null,
+    query.minLocations !== null,
+    query.has.length > 0,
+    Boolean(query.due),
+  ].filter(Boolean).length;
 }
 
 /**

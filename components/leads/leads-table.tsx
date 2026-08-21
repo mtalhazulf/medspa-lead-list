@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useOptimistic, useRef, useState, useTransition } from "react";
+import { useOptimistic, useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 
 import { bulkUpdateLeads, getMatchingLeadIds, setLeadStatus } from "@/lib/actions/leads";
 import { LabelChip } from "@/components/label-chip";
+import { SortHeader } from "@/components/leads/sort-header";
 import {
+  formatCustomValue,
   formatDate,
   formatNumber,
   formatRelative,
@@ -18,9 +21,24 @@ import {
   toHref,
 } from "@/lib/format";
 import { buildLeadQueryString, type LeadQuery } from "@/lib/leads/query";
-import type { CatalogClientType, CatalogTag, LeadListItem, Teammate } from "@/lib/leads/types";
+import type { CatalogClientType, CatalogCustomField, CatalogTag, LeadListItem, Teammate } from "@/lib/leads/types";
 import { LEAD_STATUSES, PRIORITY_LABELS, statusMeta } from "@/lib/pipeline";
 import type { LeadStatus } from "@/lib/types/database";
+
+function IconSelect(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className={props.className}>
+      <rect x="2" y="2" width="12" height="12" rx="2.5" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M5 8.2 7.1 10.3 11.2 5.7"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 interface Props {
   rows: LeadListItem[];
@@ -28,10 +46,11 @@ interface Props {
   teammates: Teammate[];
   tags: CatalogTag[];
   clientTypes: CatalogClientType[];
+  customFields: CatalogCustomField[];
   total: number;
 }
 
-export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }: Props) {
+export function LeadsTable({ rows, query, teammates, tags, clientTypes, customFields, total }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -115,16 +134,42 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
   }
 
   const exportHref = `/api/leads/export${buildLeadQueryString({}, query)}`;
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setActionSlot(document.getElementById("leads-page-actions"));
+  }, []);
+
+  const pageActions = (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        className={`h-9 px-2.5 text-sm ${allOnPageSelected ? "btn-primary" : "btn-secondary"}`}
+        title="Select rows for bulk actions. Shift-click a range."
+        aria-label="Select rows for bulk actions. Shift-click a range."
+        aria-pressed={allOnPageSelected}
+        onClick={toggleAllOnPage}
+        disabled={rows.length === 0}
+      >
+        <IconSelect className="h-4 w-4" />
+        {allOnPageSelected ? "Deselect" : "Select"}
+      </button>
+      <a href={exportHref} className="btn-secondary h-9 px-2.5 text-sm">
+        Export CSV
+      </a>
+    </div>
+  );
 
   return (
     <div className="space-y-3">
-      {(selected.size > 0 || total > 0) && (
+      {actionSlot ? createPortal(pageActions, actionSlot) : null}
+
+      {selected.size > 0 && (
       <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
-        {selected.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="rounded-lg bg-slate-900 px-2.5 py-1.5 font-medium text-white">
-              {formatNumber(selected.size)} selected
-            </span>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded-lg bg-slate-900 px-2.5 py-1.5 font-medium text-white">
+            {formatNumber(selected.size)} selected
+          </span>
 
             <select
               className="input w-auto"
@@ -250,15 +295,6 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
               Clear
             </button>
           </div>
-        ) : (
-          <p className="px-1 text-sm text-slate-500">
-            {total > 0 ? "Select rows for bulk actions. Shift-click a range." : "Import a list to start working leads."}
-          </p>
-        )}
-
-        <a href={exportHref} className="btn-secondary ml-auto text-sm">
-          Export CSV
-        </a>
       </div>
       )}
 
@@ -274,7 +310,7 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
       )}
 
       <div className={`card overflow-x-auto ${isPending ? "opacity-70" : ""}`}>
-        <table className="w-full min-w-[1100px] text-sm">
+        <table className="w-full min-w-max text-sm">
           <thead className="border-b border-slate-200 bg-slate-50/80 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th className="w-10 px-3 py-2.5">
@@ -286,15 +322,40 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
                   className="h-4 w-4 rounded border-slate-300"
                 />
               </th>
-              <th className="px-3 py-2.5 font-medium">Company</th>
-              <th className="px-3 py-2.5 font-medium">Type</th>
-              <th className="px-3 py-2.5 font-medium">Contact</th>
-              <th className="px-3 py-2.5 text-right font-medium">Google</th>
-              <th className="px-3 py-2.5 text-right font-medium">Loc.</th>
-              <th className="px-3 py-2.5 font-medium">Status</th>
-              <th className="px-3 py-2.5 font-medium">Owner</th>
-              <th className="px-3 py-2.5 font-medium">Follow-up</th>
-              <th className="px-3 py-2.5 font-medium">Updated</th>
+              <SortHeader field="name" query={query}>
+                Company
+              </SortHeader>
+              <SortHeader field="type" query={query}>
+                Type
+              </SortHeader>
+              <SortHeader field="rating" query={query} align="right">
+                Google
+              </SortHeader>
+              <SortHeader field="locations" query={query} align="right">
+                Loc.
+              </SortHeader>
+              <SortHeader field="status" query={query}>
+                Status
+              </SortHeader>
+              <SortHeader field="owner" query={query}>
+                Owner
+              </SortHeader>
+              <SortHeader field="follow_up" query={query}>
+                Follow-up
+              </SortHeader>
+              <SortHeader field="updated" query={query}>
+                Updated
+              </SortHeader>
+              <SortHeader field="contact" query={query}>
+                Contact
+              </SortHeader>
+              {customFields
+                .filter((f) => f.show_in_table)
+                .map((field) => (
+                  <SortHeader key={field.id} field={`cf:${field.slug}`} query={query}>
+                    {field.name}
+                  </SortHeader>
+                ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -338,6 +399,28 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
                         ))}
                       </div>
                     )}
+                    <div className="mt-1 flex gap-2 text-xs text-slate-500">
+                      {website && (
+                        <a
+                          href={website}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="hover:underline"
+                        >
+                          {prettyDomain(lead.website)}
+                        </a>
+                      )}
+                      {insta && (
+                        <a
+                          href={insta}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="hover:underline"
+                        >
+                          {instagramHandle(lead.instagram)}
+                        </a>
+                      )}
+                    </div>
                   </td>
 
                   <td className="px-3 py-2.5 align-top">
@@ -346,53 +429,6 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
                     ) : (
                       <span className="text-xs text-slate-400">—</span>
                     )}
-                  </td>
-
-                  <td className="px-3 py-2.5 align-top text-xs">
-                    <div className="flex flex-col gap-0.5">
-                      {lead.contact_name && (
-                        <span className="font-medium text-slate-700">{lead.contact_name}</span>
-                      )}
-                      {tel ? (
-                        <a href={tel} className="text-slate-700 hover:underline">
-                          {lead.phone}
-                        </a>
-                      ) : (
-                        <span className="text-slate-400">no phone</span>
-                      )}
-                      {lead.email ? (
-                        <a
-                          href={`mailto:${lead.email}`}
-                          className="truncate text-slate-700 hover:underline"
-                        >
-                          {lead.email}
-                        </a>
-                      ) : (
-                        <span className="text-slate-400">no email</span>
-                      )}
-                      <div className="flex gap-2 text-slate-500">
-                        {website && (
-                          <a
-                            href={website}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="hover:underline"
-                          >
-                            {prettyDomain(lead.website)}
-                          </a>
-                        )}
-                        {insta && (
-                          <a
-                            href={insta}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="hover:underline"
-                          >
-                            {instagramHandle(lead.instagram)}
-                          </a>
-                        )}
-                      </div>
-                    </div>
                   </td>
 
                   <td className="whitespace-nowrap px-3 py-2.5 align-top text-right tabular-nums">
@@ -457,19 +493,61 @@ export function LeadsTable({ rows, query, teammates, tags, clientTypes, total }:
                   <td className="whitespace-nowrap px-3 py-2.5 align-top text-xs text-slate-500">
                     {formatRelative(lead.updated_at)}
                   </td>
+
+                  <td className="px-3 py-2.5 align-top text-xs">
+                    <div className="flex flex-col gap-0.5">
+                      {lead.contact_name ? (
+                        <span className="font-medium text-slate-700">
+                          {lead.contact_name}
+                          {(lead.contact_count ?? 0) > 1 && (
+                            <span className="ml-1 font-normal text-slate-400">
+                              +{lead.contact_count - 1}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">No people yet</span>
+                      )}
+                      {lead.contact_phone ? (
+                        <a href={telHref(lead.contact_phone) ?? "#"} className="text-slate-700 hover:underline">
+                          {lead.contact_phone}
+                        </a>
+                      ) : tel ? (
+                        <a href={tel} className="text-slate-500 hover:underline">
+                          {lead.phone}
+                        </a>
+                      ) : null}
+                      {lead.contact_email ? (
+                        <a href={`mailto:${lead.contact_email}`} className="truncate text-slate-700 hover:underline">
+                          {lead.contact_email}
+                        </a>
+                      ) : lead.email ? (
+                        <a href={`mailto:${lead.email}`} className="truncate text-slate-500 hover:underline">
+                          {lead.email}
+                        </a>
+                      ) : null}
+                    </div>
+                  </td>
+                  {customFields
+                    .filter((f) => f.show_in_table)
+                    .map((field) => (
+                      <td key={field.id} className="whitespace-nowrap px-3 py-2.5 align-top text-xs text-slate-700">
+                        {formatCustomValue(lead.custom_data?.[field.slug])}
+                      </td>
+                    ))}
                 </tr>
               );
             })}
 
             {optimisticRows.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-16 text-center">
+                <td colSpan={10 + customFields.filter((f) => f.show_in_table).length} className="px-3 py-16 text-center">
                   <p className="text-sm font-medium text-slate-800">
                     {total === 0 ? "No leads in the list yet" : "No leads match these filters"}
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
                     {total === 0
-                      ? "Run the importer against your CSV, then this table fills in."
+                      ? "Run the importer against your CSV or Excel file, then this table fills in."
                       : "Clear filters or widen the search."}
                   </p>
                 </td>
